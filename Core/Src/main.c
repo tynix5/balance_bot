@@ -108,10 +108,11 @@ void clock_config() {
 
 void i2c1_config() {
 
-	// IC2_2
 	// PB8 is SCL
 	// PB9 is SDA
 	RCC->AHB1ENR |= RCC_AHB1ENR_GPIOBEN;		// enable GPIO clock
+	// enable I2C clock before configuring pins
+	RCC->APB1ENR |= RCC_APB1ENR_I2C1EN;			// enable I2C1 clock
 
 	// set AF mode for SCL and SDA
 	GPIOB->MODER |= GPIO_MODER_MODE9_1 | GPIO_MODER_MODE8_1;
@@ -122,14 +123,12 @@ void i2c1_config() {
 
 	// enable pull ups (already on board)
 
-	// AF04 for PB8 and PB9
+	// AF04 for PB8 and PB9 to select I2C1_SCL and I2C1_SDA
 	GPIOB->AFR[1] |= GPIO_AFRH_AFRH0_2 | GPIO_AFRH_AFRH1_2;
-
-	RCC->APB1ENR |= RCC_APB1ENR_I2C1EN;			// enable I2C2 clock
 
 	i2c1_sw_rst();
 
-	// I2C steps in sequence
+	// I2C steps in sequence (per data sheet)
 	// 1. Disable peripheral
 	// 2. Program peripheral input clock to generate correct timing
 	// 3. Configure clock control registers
@@ -146,7 +145,7 @@ void i2c1_config() {
 	// tHIGH = CCR * tPCLK
 	// CCR = 46.667
 //	I2C1->CCR = I2C_CCR_FS | 47;	// fast mode (up to 400kHz SCL) and set freq to 300kHz
-	// 10kHz
+	// 10kHz slow mode
 	I2C1->CCR = 2100;
 	// max SCL tRISE is 300ns
 	// tPCLK = 23.8ns
@@ -158,6 +157,7 @@ void i2c1_config() {
 
 void i2c1_sw_rst() {
 
+	// reset I2C1
 	I2C1->CR1 |= I2C_CR1_SWRST;
 	I2C1->CR1 &= ~I2C_CR1_SWRST;
 }
