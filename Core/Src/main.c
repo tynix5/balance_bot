@@ -32,6 +32,12 @@ void i2c_ack();
 void i2c_nack();
 void i2c1_release();
 
+// debugging
+void uart1_config();
+void uart_send(uint8_t byte);
+
+void bno055_config();
+
 
 int main(void)
 {
@@ -46,9 +52,13 @@ int main(void)
 	i2c1_config();
 	while (i2c1_test() != 0xA0);
 
+	uart1_config();
+
   while (1)
   {
 	  GPIOA->ODR |= (1 << 10);
+	  uart_send((uint8_t)'.');
+	  for (int i = 0; i < 500000; i++);
   }
 }
 
@@ -247,4 +257,49 @@ void i2c1_release() {
 
 	// set SCL high, line should be pulled high when I2C is idle
 	GPIOB->ODR |= GPIO_ODR_ODR_8;
+}
+
+
+void uart1_config() {
+
+	// UART TX is PA9 or D8
+
+	// enable clock
+	RCC->AHB1ENR |= RCC_AHB1ENR_GPIOAEN;
+
+	// select alternate function mode for PA9
+	GPIOA->MODER |= GPIO_MODER_MODER9_1;
+	GPIOA->MODER &= ~GPIO_MODER_MODER9_0;
+
+	// select UART_TX1 as AF
+	GPIOA->AFR[1] |= GPIO_AFRH_AFRH1_2 | GPIO_AFRH_AFRH1_1 | GPIO_AFRH_AFRH1_0;
+
+
+	// enable USART1 clock
+	RCC->APB2ENR |= RCC_APB2ENR_USART1EN;
+
+	USART1->CR1 |= USART_CR1_UE;		// USART enable
+	USART1->CR1 &= ~USART_CR1_M;		// 1 start bit, 8 data bits, n stop bits
+	USART1->CR1 &= ~USART_CR1_PCE;		// no parity
+
+	USART1->CR2 = 0;					// 1 stop bit, asynchronous
+
+	// set baud rate to 9600 bps
+	// USARTDIV = fCK / (8 * (2 - OVER8) * baud)
+	// fCK = 84MHz (APB2 bus)
+	// baud = 9600
+	// USARTDIV = 546.875
+	// Mantissa = 546
+	// Fraction = 0.875 * 16 (4 bits for fraction) = 14
+	USART1->BRR = 546 << 4 | 14;
+
+	USART1->CR1 |= USART_CR1_TE;		// enable transmitter
+}
+
+
+void uart_send(uint8_t byte) {
+
+	while (!(USART1->SR & USART_SR_TXE));		// wait until data register is empty
+	USART1->DR = byte;			// load register
+	while (!(USART1->SR & USART_SR_TC));		// wait until transmission complete
 }
