@@ -26,6 +26,8 @@ void clock_config();
 void i2c1_config();
 void i2c1_sw_rst();
 uint8_t i2c1_test();
+void i2c_writebyte(uint8_t slave_addr, uint8_t reg_addr, uint8_t byte);
+uint8_t i2c_readbyte(uint8_t slave_addr, uint8_t reg_addr);
 void i2c_start();
 void i2c_request_stop();
 void i2c_ack();
@@ -35,29 +37,45 @@ void i2c1_release();
 // debugging
 void uart1_config();
 void uart_send(uint8_t byte);
+void uart_send_num(int16_t num);
 
-void bno055_config();
+uint8_t bno055_config();
+void bno055_read_euler(int16_t * roll, int16_t * pitch, int16_t * heading);
 
 
 int main(void)
 {
 
 	clock_config();
+	i2c1_config();
+	uart1_config();
 
 	RCC->AHB1ENR |= (1 << 0);
 	GPIOA->MODER |= (1 << 20);
 	GPIOA->MODER &= ~(1 << 21);
 
 
-	i2c1_config();
-	while (i2c1_test() != 0xA0);
+	while (bno055_config());
 
-	uart1_config();
+	while ((i2c_readbyte(0x50, 0x3d) & 0x0f) != 0x08) {
+
+		uart_send((uint8_t)'_');
+		for (int i = 0; i < 500000; i++);
+	}
+
 
   while (1)
   {
-	  GPIOA->ODR |= (1 << 10);
-	  uart_send((uint8_t)'.');
+//	  GPIOA->ODR |= (1 << 10);
+//	  uart_send((uint8_t)'.');
+	  int16_t roll, heading, pitch;
+	  bno055_read_euler(&roll, &pitch, &heading);
+	  // pg 35 bno055 datasheet
+	  // 1 degree = 16 LSB
+	  roll = roll / 16;
+	  uart_send_num(roll);
+	  uart_send('\n');
+	  uart_send('\r');
 	  for (int i = 0; i < 500000; i++);
   }
 }
@@ -187,6 +205,12 @@ uint8_t i2c1_test() {
 	uint8_t slave_addr = 0x50;
 	uint8_t who_am_i_addr = 0;
 
+	return i2c_readbyte(slave_addr, who_am_i_addr);
+}
+
+
+void i2c_writebyte(uint8_t slave_addr, uint8_t reg_addr, uint8_t byte) {
+
 	while (I2C1->SR2 & I2C_SR2_BUSY);
 
 	i2c_start();
@@ -194,7 +218,24 @@ uint8_t i2c1_test() {
 	while (!(I2C1->SR1 & I2C_SR1_ADDR));
 	(void)I2C1->SR2;						// dummy read to clear status bit
 	while (!(I2C1->SR1 & I2C_SR1_TXE));		// data register needs to be empty
-	I2C1->DR = who_am_i_addr;				// set pointer to CHIP ID on BNO055
+	I2C1->DR = reg_addr;					// set pointer on BNO055
+	while (!(I2C1->SR1 & I2C_SR1_TXE));		// data register needs to be empty
+	I2C1->DR = byte;
+	while (!(I2C1->SR1 & I2C_SR1_TXE));
+	i2c_request_stop();
+}
+
+
+uint8_t i2c_readbyte(uint8_t slave_addr, uint8_t reg_addr) {
+
+	while (I2C1->SR2 & I2C_SR2_BUSY);
+
+	i2c_start();
+	I2C1->DR = slave_addr;
+	while (!(I2C1->SR1 & I2C_SR1_ADDR));
+	(void)I2C1->SR2;						// dummy read to clear status bit
+	while (!(I2C1->SR1 & I2C_SR1_TXE));		// data register needs to be empty
+	I2C1->DR = reg_addr;					// set pointer on BNO055
 	while (!(I2C1->SR1 & I2C_SR1_TXE));		// data register needs to be empty
 
 	// For single byte reads, pg 482 of reference manual "Closing the communication"
@@ -302,4 +343,68 @@ void uart_send(uint8_t byte) {
 	while (!(USART1->SR & USART_SR_TXE));		// wait until data register is empty
 	USART1->DR = byte;			// load register
 	while (!(USART1->SR & USART_SR_TC));		// wait until transmission complete
+}
+
+
+void uart_send_num(int16_t num) {
+
+	if (num == 0)
+		uart_send('0');
+	else if (num < 0) {
+
+		uart_send('-');
+		num = num * -1;
+	}
+
+	for (int i = 10000; i > 0; i /= 10) {
+
+		if (num > i) {
+
+			uart_send((num / i) + '0');
+			num = num - (num / i) * i;
+		}
+	}
+}
+
+
+uint8_t bno055_config() {
+
+	const uint8_t slave_addr = 0x50;
+	const uint8_t opr_reg = 0x3d;
+
+	// on restart, configure registers by setting mode to CONFIG
+	const uint8_t opr_mode_config = 0x00;
+	i2c_writebyte(slave_addr, opr_reg, opr_mode_config);
+
+	// delay >19 ms
+	for (int i = 0; i < 2000000; i++);
+
+	// select Euler angles in units of degrees
+	const uint8_t unit_sel_reg = 0x3b;
+	i2c_writebyte(slave_addr, unit_sel_reg, 0x80);
+
+	// set up fusion sensor mode in OPR_MODE
+	const uint8_t opr_mode_imu = 0x08;
+	i2c_writebyte(slave_addr, opr_reg, opr_mode_imu);
+
+	// delay >7 ms
+	for (int i = 0; i < 2000000; i++);
+
+	// check POST register ST_RESULT
+	const uint8_t st_result = 0x36;
+	uint8_t post = i2c_readbyte(slave_addr, st_result);
+
+	if ((post & 0x0f) == 0x0f)
+		return 0;
+	else
+		return 1;
+}
+
+
+void bno055_read_euler(int16_t * roll, int16_t * pitch, int16_t * heading) {
+
+	uint16_t roll_val;
+	roll_val = i2c_readbyte(0x50, 0x1c);	// read lsb
+	roll_val |= i2c_readbyte(0x50, 0x1d) << 8;		// read msb
+	*roll = roll_val;
 }
