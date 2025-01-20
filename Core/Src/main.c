@@ -1,4 +1,3 @@
-/* USER CODE BEGIN Header */
 /**
   ******************************************************************************
   * @file           : main.c
@@ -16,6 +15,8 @@
   ******************************************************************************
   */
 
+#include <stdlib.h>
+#include <math.h>
 #include "main.h"
 
 
@@ -25,22 +26,25 @@ void clock_config();
 // configure I2C master
 void i2c1_config();
 void i2c1_sw_rst();
-uint8_t i2c1_test();
-void i2c_writebyte(uint8_t slave_addr, uint8_t reg_addr, uint8_t byte);
-uint8_t i2c_readbyte(uint8_t slave_addr, uint8_t reg_addr);
-void i2c_start();
-void i2c_request_stop();
-void i2c_ack();
-void i2c_nack();
+void i2c1_writebyte(uint8_t slave_addr, uint8_t reg_addr, uint8_t byte);
+uint8_t i2c1_readbyte(uint8_t slave_addr, uint8_t reg_addr);
+void i2c1_readburst(uint8_t slave_addr, uint8_t reg_addr, uint8_t len, uint8_t * bytes);
+void i2c1_start();
+void i2c1_request_stop();
+void i2c1_ack();
+void i2c1_nack();
 void i2c1_release();
 
 // debugging
-void uart1_config();
-void uart_send(uint8_t byte);
-void uart_send_num(int16_t num);
+void uart1_config(uint32_t baud);
+void uart1_writebyte(uint8_t byte);
+void uart1_writeint(int num);
+void uart1_writestr(char * str);
 
-uint8_t bno055_config();
-void bno055_read_euler(int16_t * roll, int16_t * pitch, int16_t * heading);
+uint8_t imu_config();
+uint8_t imu_test();
+void imu_read_euler(int16_t * roll_raw, int16_t * pitch_raw, int16_t * heading_raw);
+void convert_euler(int16_t roll_raw, int16_t pitch_raw, int16_t heading_raw, int16_t * roll, int16_t * pitch, int16_t * heading);
 
 
 int main(void)
@@ -48,35 +52,57 @@ int main(void)
 
 	clock_config();
 	i2c1_config();
-	uart1_config();
-
-	RCC->AHB1ENR |= (1 << 0);
-	GPIOA->MODER |= (1 << 20);
-	GPIOA->MODER &= ~(1 << 21);
+	uart1_config(9600);
 
 
-	while (bno055_config());
+	while (!imu_config());
 
-	while ((i2c_readbyte(0x50, 0x3d) & 0x0f) != 0x08) {
+	uart1_writestr("Start...\n\r");
 
-		uart_send((uint8_t)'_');
-		for (int i = 0; i < 500000; i++);
-	}
+	const float kp = 0.1;
+	const float ki = 0.01;
+	const float pitch_target = 0;
 
+	float past_err[20] = {0};
+	int past_err_ptr = 0;
+	float sum_err = 0;
 
   while (1)
   {
-//	  GPIOA->ODR |= (1 << 10);
-//	  uart_send((uint8_t)'.');
-	  int16_t roll, heading, pitch;
-	  bno055_read_euler(&roll, &pitch, &heading);
-	  // pg 35 bno055 datasheet
-	  // 1 degree = 16 LSB
-	  roll = roll / 16;
-	  uart_send_num(roll);
-	  uart_send('\n');
-	  uart_send('\r');
-	  for (int i = 0; i < 500000; i++);
+
+	  int16_t roll_raw, heading_raw, pitch_raw, roll, heading, pitch;
+	  imu_read_euler(&roll_raw, &pitch_raw, &heading_raw);
+	  convert_euler(roll_raw, pitch_raw, heading_raw, &roll, &pitch, &heading);
+
+	  // pitch is one we care about
+	  float pitch_err = pitch - pitch_target;
+
+	  // use circular buffer for integral component?
+	  // after new measurement comes in, move last out, subtract it from total
+	  // move new measurement in, add it to total
+	  float oldest_err = past_err[past_err_ptr];
+	  past_err[past_err_ptr++] = pitch_err;
+
+	  if (past_err_ptr == 20)
+		  past_err_ptr = 0;
+
+	  sum_err -= oldest_err;		// remove oldest element from sum
+	  sum_err += pitch_err;			// add newest element to sum
+
+	  float controller_out = kp * pitch_err + ki * sum_err;
+
+	  // use pwm on EN pins to control speed
+	  // change 1,2 and 3,4 signals for forward/backward
+
+//	  uart1_writestr("Roll: ");
+//	  uart1_writeint(roll);
+//	  uart1_writestr("\t\tPitch: ");
+//	  uart1_writeint(pitch);
+//	  uart1_writestr("\t\tHeading: ");
+//	  uart1_writeint(heading);
+//	  uart1_writebyte('\n');
+//	  uart1_writebyte('\r');
+//	  for (int i = 0; i < 500000; i++);
   }
 }
 
@@ -200,20 +226,13 @@ void i2c1_sw_rst() {
 	I2C1->CR1 &= ~I2C_CR1_SWRST;
 }
 
-uint8_t i2c1_test() {
-
-	uint8_t slave_addr = 0x50;
-	uint8_t who_am_i_addr = 0;
-
-	return i2c_readbyte(slave_addr, who_am_i_addr);
-}
 
 
-void i2c_writebyte(uint8_t slave_addr, uint8_t reg_addr, uint8_t byte) {
+void i2c1_writebyte(uint8_t slave_addr, uint8_t reg_addr, uint8_t byte) {
 
 	while (I2C1->SR2 & I2C_SR2_BUSY);
 
-	i2c_start();
+	i2c1_start();
 	I2C1->DR = slave_addr;
 	while (!(I2C1->SR1 & I2C_SR1_ADDR));
 	(void)I2C1->SR2;						// dummy read to clear status bit
@@ -222,15 +241,15 @@ void i2c_writebyte(uint8_t slave_addr, uint8_t reg_addr, uint8_t byte) {
 	while (!(I2C1->SR1 & I2C_SR1_TXE));		// data register needs to be empty
 	I2C1->DR = byte;
 	while (!(I2C1->SR1 & I2C_SR1_TXE));
-	i2c_request_stop();
+	i2c1_request_stop();
 }
 
 
-uint8_t i2c_readbyte(uint8_t slave_addr, uint8_t reg_addr) {
+uint8_t i2c1_readbyte(uint8_t slave_addr, uint8_t reg_addr) {
 
 	while (I2C1->SR2 & I2C_SR2_BUSY);
 
-	i2c_start();
+	i2c1_start();
 	I2C1->DR = slave_addr;
 	while (!(I2C1->SR1 & I2C_SR1_ADDR));
 	(void)I2C1->SR2;						// dummy read to clear status bit
@@ -239,34 +258,74 @@ uint8_t i2c_readbyte(uint8_t slave_addr, uint8_t reg_addr) {
 	while (!(I2C1->SR1 & I2C_SR1_TXE));		// data register needs to be empty
 
 	// For single byte reads, pg 482 of reference manual "Closing the communication"
-	i2c_start();
+	i2c1_start();
 	I2C1->DR = slave_addr | 0x01;			// read mode
 	while (!(I2C1->SR1 & I2C_SR1_ADDR));
-	i2c_nack();
+	i2c1_nack();
 	(void)I2C1->SR2;						// dummy read to clear status bit
-	i2c_request_stop();
+	i2c1_request_stop();
 	while (!(I2C1->SR1 & I2C_SR1_RXNE));	// wait for full data register
 	return I2C1->DR;
 }
 
 
-void i2c_start() {
+void i2c1_readburst(uint8_t slave_addr, uint8_t reg_addr, uint8_t len, uint8_t * bytes) {
+
+	if (len == 0)
+		return;
+
+	while (I2C1->SR2 & I2C_SR2_BUSY);
+
+	i2c1_start();
+	I2C1->DR = slave_addr;
+	while (!(I2C1->SR1 & I2C_SR1_ADDR));
+	(void)I2C1->SR2;						// dummy read to clear status bit
+	while (!(I2C1->SR1 & I2C_SR1_TXE));		// data register needs to be empty
+	I2C1->DR = reg_addr;					// set first pointer on BNO055
+	while (!(I2C1->SR1 & I2C_SR1_TXE));		// data register needs to be empty
+
+	i2c1_start();
+	I2C1->DR = slave_addr | 0x01;			// read mode
+	while (!(I2C1->SR1 & I2C_SR1_ADDR));
+
+	// acknowledge next byte if burst >1 byte
+	if (len != 1)
+		(void)I2C1->SR2;
+
+	for (uint8_t i = 0; i < len - 1; i++) {
+
+		i2c1_ack();
+		while (!(I2C1->SR1 & I2C_SR1_RXNE));	// wait for full data register
+		*bytes = I2C1->DR;					// store byte
+		bytes++;							// move pointer
+	}
+
+	i2c1_nack();								// clear ACK bit just after reading second last data byte
+	if (len == 1)
+		(void)I2C1->SR2;
+	i2c1_request_stop();
+	while (!(I2C1->SR1 & I2C_SR1_RXNE));	// wait for full data register
+	*bytes = I2C1->DR;
+}
+
+
+void i2c1_start() {
 
 	I2C1->CR1 |= I2C_CR1_START;
 	while (!(I2C1->SR1 & I2C_SR1_SB));		// wait for start bit generation
 }
 
-void i2c_request_stop() {
+void i2c1_request_stop() {
 
 	I2C1->CR1 |= I2C_CR1_STOP;
 }
 
-void i2c_ack() {
+void i2c1_ack() {
 
 	I2C1->CR1 |= I2C_CR1_ACK;
 }
 
-void i2c_nack() {
+void i2c1_nack() {
 
 	I2C1->CR1 &= ~I2C_CR1_ACK;
 }
@@ -301,7 +360,7 @@ void i2c1_release() {
 }
 
 
-void uart1_config() {
+void uart1_config(uint32_t baud) {
 
 	// UART TX is PA9 or D8
 
@@ -325,20 +384,22 @@ void uart1_config() {
 
 	USART1->CR2 = 0;					// 1 stop bit, asynchronous
 
-	// set baud rate to 9600 bps
 	// USARTDIV = fCK / (8 * (2 - OVER8) * baud)
 	// fCK = 84MHz (APB2 bus)
-	// baud = 9600
+	// Ex. baud = 9600
 	// USARTDIV = 546.875
 	// Mantissa = 546
 	// Fraction = 0.875 * 16 (4 bits for fraction) = 14
-	USART1->BRR = 546 << 4 | 14;
+	float usartdiv = (float) 84000000 / (16 * baud);
+	uint16_t mantissa = (uint16_t) usartdiv;
+	uint8_t fraction = (uint8_t) ((usartdiv - mantissa) * 16);
+	USART1->BRR = mantissa << 4 | fraction;
 
 	USART1->CR1 |= USART_CR1_TE;		// enable transmitter
 }
 
 
-void uart_send(uint8_t byte) {
+void uart1_writebyte(uint8_t byte) {
 
 	while (!(USART1->SR & USART_SR_TXE));		// wait until data register is empty
 	USART1->DR = byte;			// load register
@@ -346,65 +407,91 @@ void uart_send(uint8_t byte) {
 }
 
 
-void uart_send_num(int16_t num) {
+void uart1_writeint(int num) {
 
-	if (num == 0)
-		uart_send('0');
-	else if (num < 0) {
+	if (num < 0)
+		uart1_writebyte('-');
 
-		uart_send('-');
-		num = num * -1;
-	}
+	num = abs(num);
+	int power = floor(log10(num));		// calculate power of 10
 
-	for (int i = 10000; i > 0; i /= 10) {
-
-		if (num > i) {
-
-			uart_send((num / i) + '0');
-			num = num - (num / i) * i;
-		}
-	}
+	for (int i = pow(10, power); i > 0; i /= 10)
+		uart1_writebyte((num / i) % 10 + '0');
 }
 
 
-uint8_t bno055_config() {
+void uart1_writestr(char * str) {
+
+	int i = 0;
+	while (str[i] != '\0')
+		uart1_writebyte(str[i++]);
+}
+
+
+uint8_t imu_config() {
 
 	const uint8_t slave_addr = 0x50;
 	const uint8_t opr_reg = 0x3d;
 
+	while (!imu_test());		// read chip id
+
 	// on restart, configure registers by setting mode to CONFIG
 	const uint8_t opr_mode_config = 0x00;
-	i2c_writebyte(slave_addr, opr_reg, opr_mode_config);
+	i2c1_writebyte(slave_addr, opr_reg, opr_mode_config);
 
 	// delay >19 ms
 	for (int i = 0; i < 2000000; i++);
 
 	// select Euler angles in units of degrees
 	const uint8_t unit_sel_reg = 0x3b;
-	i2c_writebyte(slave_addr, unit_sel_reg, 0x80);
+	i2c1_writebyte(slave_addr, unit_sel_reg, 0x80);
+
+	// for current setup, placement P3 is used (from BNO055 datasheet)
+	// thus, AXIS_REMAP = 0x21 and AXIS_SIGN = 0x02
+	const uint8_t axis_map_config_reg = 0x41;
+	const uint8_t axis_map_sign_reg = 0x42;
+	i2c1_writebyte(slave_addr, axis_map_config_reg, 0x21);
+	i2c1_writebyte(slave_addr, axis_map_sign_reg, 0x02);
 
 	// set up fusion sensor mode in OPR_MODE
 	const uint8_t opr_mode_imu = 0x08;
-	i2c_writebyte(slave_addr, opr_reg, opr_mode_imu);
+	i2c1_writebyte(slave_addr, opr_reg, opr_mode_imu);
 
 	// delay >7 ms
 	for (int i = 0; i < 2000000; i++);
 
 	// check POST register ST_RESULT
+	// returns 1 if all sensors are working
 	const uint8_t st_result = 0x36;
-	uint8_t post = i2c_readbyte(slave_addr, st_result);
-
-	if ((post & 0x0f) == 0x0f)
-		return 0;
-	else
-		return 1;
+	return ((i2c1_readbyte(slave_addr, st_result) & 0x0f) == 0x0f) ? 1 : 0;
 }
 
 
-void bno055_read_euler(int16_t * roll, int16_t * pitch, int16_t * heading) {
+uint8_t imu_test() {
 
-	uint16_t roll_val;
-	roll_val = i2c_readbyte(0x50, 0x1c);	// read lsb
-	roll_val |= i2c_readbyte(0x50, 0x1d) << 8;		// read msb
-	*roll = roll_val;
+	uint8_t slave_addr = 0x50;
+	uint8_t who_am_i_addr = 0;
+
+	// returns 1 if correct chip id is read
+	return (i2c1_readbyte(slave_addr, who_am_i_addr) == 0xa0) ? 1 : 0;
+}
+
+
+void imu_read_euler(int16_t * roll_raw, int16_t * pitch_raw, int16_t * heading_raw) {
+
+	uint8_t raw_euler[6];			// 6 bytes total for euler angles
+	const uint8_t slave_addr = 0x50;
+	const uint8_t start_addr = 0x1a;		// starting byte is heading LSB
+	i2c1_readburst(slave_addr, start_addr, 6, raw_euler);		// read 6 consecutive bytes
+	*heading_raw = raw_euler[0] | (raw_euler[1] << 8);
+	*roll_raw = raw_euler[2] | (raw_euler[3] << 8);
+	*pitch_raw = raw_euler[4] | (raw_euler[5] << 8);
+}
+
+
+void convert_euler(int16_t roll_raw, int16_t pitch_raw, int16_t heading_raw, int16_t * roll, int16_t * pitch, int16_t * heading) {
+
+	*roll = roll_raw / 16;		// 1 degree = 16 LSB
+	*pitch = pitch_raw / 16;
+	*heading = heading_raw / 16;
 }
