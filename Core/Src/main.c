@@ -41,6 +41,9 @@ void uart1_writebyte(uint8_t byte);
 void uart1_writeint(int num);
 void uart1_writestr(char * str);
 
+// PWM generation
+void tim2_config();
+
 uint8_t imu_config();
 uint8_t imu_test();
 void imu_read_euler(int16_t * roll_raw, int16_t * pitch_raw, int16_t * heading_raw);
@@ -51,45 +54,49 @@ int main(void)
 {
 
 	clock_config();
-	i2c1_config();
-	uart1_config(9600);
+//	i2c1_config();
+//	uart1_config(9600);
+	tim2_config();
 
 
-	while (!imu_config());
-
-	uart1_writestr("Start...\n\r");
-
-	const float kp = 0.1;
-	const float ki = 0.01;
-	const float pitch_target = 0;
-
-	float past_err[20] = {0};
-	int past_err_ptr = 0;
-	float sum_err = 0;
+//	while (!imu_config());
+//
+//	uart1_writestr("Start...\n\r");
+//
+//	const float kp = 0.1;
+//	const float ki = 0.01;
+//	const float pitch_target = 0;
+//
+//	float past_err[20] = {0};
+//	int past_err_ptr = 0;
+//	float sum_err = 0;
 
   while (1)
   {
 
-	  int16_t roll_raw, heading_raw, pitch_raw, roll, heading, pitch;
-	  imu_read_euler(&roll_raw, &pitch_raw, &heading_raw);
-	  convert_euler(roll_raw, pitch_raw, heading_raw, &roll, &pitch, &heading);
+	  while (!(TIM2->SR & TIM_SR_CC3IF));
+	  while (!(TIM2->SR & TIM_SR_CC4IF));
 
-	  // pitch is one we care about
-	  float pitch_err = pitch - pitch_target;
-
-	  // use circular buffer for integral component?
-	  // after new measurement comes in, move last out, subtract it from total
-	  // move new measurement in, add it to total
-	  float oldest_err = past_err[past_err_ptr];
-	  past_err[past_err_ptr++] = pitch_err;
-
-	  if (past_err_ptr == 20)
-		  past_err_ptr = 0;
-
-	  sum_err -= oldest_err;		// remove oldest element from sum
-	  sum_err += pitch_err;			// add newest element to sum
-
-	  float controller_out = kp * pitch_err + ki * sum_err;
+//	  int16_t roll_raw, heading_raw, pitch_raw, roll, heading, pitch;
+//	  imu_read_euler(&roll_raw, &pitch_raw, &heading_raw);
+//	  convert_euler(roll_raw, pitch_raw, heading_raw, &roll, &pitch, &heading);
+//
+//	  // pitch is one we care about
+//	  float pitch_err = pitch - pitch_target;
+//
+//	  // use circular buffer for integral component?
+//	  // after new measurement comes in, move last out, subtract it from total
+//	  // move new measurement in, add it to total
+//	  float oldest_err = past_err[past_err_ptr];
+//	  past_err[past_err_ptr++] = pitch_err;
+//
+//	  if (past_err_ptr == 20)
+//		  past_err_ptr = 0;
+//
+//	  sum_err -= oldest_err;		// remove oldest element from sum
+//	  sum_err += pitch_err;			// add newest element to sum
+//
+//	  float controller_out = kp * pitch_err + ki * sum_err;
 
 	  // use pwm on EN pins to control speed
 	  // change 1,2 and 3,4 signals for forward/backward
@@ -163,6 +170,7 @@ void clock_config() {
 	while (!((RCC->CFGR) & RCC_CFGR_SWS_1));
 }
 
+
 void i2c1_config() {
 
 	// PB8 is SCL
@@ -219,13 +227,13 @@ void i2c1_config() {
 	I2C1->CR1 |= I2C_CR1_PE;	// enable peripheral
 }
 
+
 void i2c1_sw_rst() {
 
 	// reset I2C1
 	I2C1->CR1 |= I2C_CR1_SWRST;
 	I2C1->CR1 &= ~I2C_CR1_SWRST;
 }
-
 
 
 void i2c1_writebyte(uint8_t slave_addr, uint8_t reg_addr, uint8_t byte) {
@@ -425,6 +433,50 @@ void uart1_writestr(char * str) {
 	int i = 0;
 	while (str[i] != '\0')
 		uart1_writebyte(str[i++]);
+}
+
+
+void tim2_config() {
+
+	// frequency determined by TIMx_ARR
+	// duty cycle determined by TIMx_CCRx
+	// config TIM2 on APB1 bus
+	// PA2 is TIM2_CH3 --> D1
+	// PA3 is TIM2_CH4 --> D0
+	// TIM2 is a 32 bit counter
+	// must set AF for pins
+
+	RCC->APB1ENR |= RCC_APB1ENR_TIM2EN;			// enable TIM2 clock
+	RCC->AHB1ENR |= RCC_AHB1ENR_GPIOAEN;		// enable GPIOA clock
+
+	// select alternate function mode
+	GPIOA->MODER |= GPIO_MODER_MODER2_1 | GPIO_MODER_MODER3_1;
+	GPIOA->MODER &= ~(GPIO_MODER_MODER2_0 | GPIO_MODER_MODER3_0);
+
+	// alternate function mode 1
+	GPIOA->AFR[0] &= ~(GPIO_AFRL_AFRL2 | GPIO_AFRL_AFRL3);
+	GPIOA->AFR[0] |= GPIO_AFRL_AFRL2_0 | GPIO_AFRL_AFRL3_0;
+
+	TIM2->CR1 = 0;		// no clock division, edge aligned, up counter, counter disabled
+	TIM2->PSC = 0;		// /1 prescaler
+
+	TIM2->CCMR2 = TIM_CCMR2_OC3M_2 | TIM_CCMR2_OC3M_1;		// configure TIM2_CH3 (PA2) to PWM mode
+	TIM2->CCMR2 |= TIM_CCMR2_OC4M_2 | TIM_CCMR2_OC4M_1;		// configure TIM2_CH4 (PA3) to PWM mode
+	TIM2->CCMR2 |= TIM_CCMR2_OC3PE | TIM_CCMR2_OC4PE;		// output compare 3 and 4 preload enable
+
+	TIM2->CCER = TIM_CCER_CC3E | TIM_CCER_CC4E;		// active high, output channels enabled
+
+
+	TIM2->ARR = 2048;		// output frequency approx 20.5kHz
+	TIM2->CCR3 = 10;
+	TIM2->CCR4 = 2047;		// test
+
+	TIM2->CR1 = TIM_CR1_ARPE;	// auto reload register preload enable
+
+	TIM2->EGR = TIM_EGR_UG;		// reinitiliaze counter and update registers
+
+	TIM2->CNT = 0;				// reset counter
+	TIM2->CR1 |= TIM_CR1_CEN;	// enable counter
 }
 
 
