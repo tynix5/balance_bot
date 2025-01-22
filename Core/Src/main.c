@@ -54,52 +54,52 @@ int main(void)
 {
 
 	clock_config();
-//	i2c1_config();
-//	uart1_config(9600);
+	i2c1_config();
+	uart1_config(9600);
 	tim2_config();
 
 
-//	while (!imu_config());
-//
-//	uart1_writestr("Start...\n\r");
-//
-//	const float kp = 0.1;
-//	const float ki = 0.01;
-//	const float pitch_target = 0;
-//
-//	float past_err[20] = {0};
-//	int past_err_ptr = 0;
-//	float sum_err = 0;
+	while (!imu_config());
+
+	uart1_writestr("Start...\n\r");
+
+	const float kp = 0.1;
+	const float ki = 0.01;
+	const float pitch_setpoint = 0;
+
+	float sum_err = 0;
+
+	int i = 0;
 
   while (1)
   {
 
-	  while (!(TIM2->SR & TIM_SR_CC3IF));
-	  while (!(TIM2->SR & TIM_SR_CC4IF));
+	  int16_t roll_raw, heading_raw, pitch_raw, roll, heading, pitch;
+	  imu_read_euler(&roll_raw, &pitch_raw, &heading_raw);
+	  convert_euler(roll_raw, pitch_raw, heading_raw, &roll, &pitch, &heading);
 
-//	  int16_t roll_raw, heading_raw, pitch_raw, roll, heading, pitch;
-//	  imu_read_euler(&roll_raw, &pitch_raw, &heading_raw);
-//	  convert_euler(roll_raw, pitch_raw, heading_raw, &roll, &pitch, &heading);
-//
-//	  // pitch is one we care about
-//	  float pitch_err = pitch - pitch_target;
-//
-//	  // use circular buffer for integral component?
-//	  // after new measurement comes in, move last out, subtract it from total
-//	  // move new measurement in, add it to total
-//	  float oldest_err = past_err[past_err_ptr];
-//	  past_err[past_err_ptr++] = pitch_err;
-//
-//	  if (past_err_ptr == 20)
-//		  past_err_ptr = 0;
-//
-//	  sum_err -= oldest_err;		// remove oldest element from sum
-//	  sum_err += pitch_err;			// add newest element to sum
-//
-//	  float controller_out = kp * pitch_err + ki * sum_err;
+	  // pitch is one we care about
+	  float pitch_err = pitch - pitch_setpoint;
+
+	  sum_err += pitch_err;
+
+
+	  float controller_out = kp * pitch_err + ki * sum_err;
+
+	  controller_out = abs(controller_out);
+
+	  if (controller_out > 500)
+		  controller_out = 500;
 
 	  // use pwm on EN pins to control speed
 	  // change 1,2 and 3,4 signals for forward/backward
+	  uint16_t pwm_val = round((2048.0 / 500.0) * controller_out);
+	  TIM2->CCR1 = pwm_val;
+
+	  TIM2->CCR2 = i++;
+
+	  if (i == 2048)
+		  i = 0;
 
 //	  uart1_writestr("Roll: ");
 //	  uart1_writeint(roll);
@@ -440,9 +440,10 @@ void tim2_config() {
 
 	// frequency determined by TIMx_ARR
 	// duty cycle determined by TIMx_CCRx
-	// config TIM2 on APB1 bus
-	// PA2 is TIM2_CH3 --> D1
-	// PA3 is TIM2_CH4 --> D0
+	// Use PA0 and PA1
+	// PA2 and PA3 are used by USART and must be bridged in order to function
+	// PA0 is TIM2_CH1 --> A0
+	// PA1 is TIM2_CH2 --> A1
 	// TIM2 is a 32 bit counter
 	// must set AF for pins
 
@@ -450,26 +451,26 @@ void tim2_config() {
 	RCC->AHB1ENR |= RCC_AHB1ENR_GPIOAEN;		// enable GPIOA clock
 
 	// select alternate function mode
-	GPIOA->MODER |= GPIO_MODER_MODER2_1 | GPIO_MODER_MODER3_1;
-	GPIOA->MODER &= ~(GPIO_MODER_MODER2_0 | GPIO_MODER_MODER3_0);
+	GPIOA->MODER |= GPIO_MODER_MODER0_1 | GPIO_MODER_MODER1_1;
+	GPIOA->MODER &= ~(GPIO_MODER_MODER0_0 | GPIO_MODER_MODER1_0);
 
 	// alternate function mode 1
-	GPIOA->AFR[0] &= ~(GPIO_AFRL_AFRL2 | GPIO_AFRL_AFRL3);
-	GPIOA->AFR[0] |= GPIO_AFRL_AFRL2_0 | GPIO_AFRL_AFRL3_0;
+	GPIOA->AFR[0] &= ~(GPIO_AFRL_AFRL0 | GPIO_AFRL_AFRL1);
+	GPIOA->AFR[0] |= GPIO_AFRL_AFRL0_0 | GPIO_AFRL_AFRL1_0;
 
 	TIM2->CR1 = 0;		// no clock division, edge aligned, up counter, counter disabled
 	TIM2->PSC = 0;		// /1 prescaler
 
-	TIM2->CCMR2 = TIM_CCMR2_OC3M_2 | TIM_CCMR2_OC3M_1;		// configure TIM2_CH3 (PA2) to PWM mode
-	TIM2->CCMR2 |= TIM_CCMR2_OC4M_2 | TIM_CCMR2_OC4M_1;		// configure TIM2_CH4 (PA3) to PWM mode
-	TIM2->CCMR2 |= TIM_CCMR2_OC3PE | TIM_CCMR2_OC4PE;		// output compare 3 and 4 preload enable
+	TIM2->CCMR1 = TIM_CCMR1_OC1M_2 | TIM_CCMR1_OC1M_1;		// configure TIM2_CH1 (PA0) to PWM mode
+	TIM2->CCMR1 |= TIM_CCMR1_OC2M_2 | TIM_CCMR1_OC2M_1;		// configure TIM2_CH2 (PA1) to PWM mode
+	TIM2->CCMR1 |= TIM_CCMR1_OC1PE | TIM_CCMR1_OC2PE;		// output compare 1 and 2 preload enable
 
-	TIM2->CCER = TIM_CCER_CC3E | TIM_CCER_CC4E;		// active high, output channels enabled
+	TIM2->CCER = TIM_CCER_CC1E | TIM_CCER_CC2E;		// active high, output channels enabled
 
 
 	TIM2->ARR = 2048;		// output frequency approx 20.5kHz
-	TIM2->CCR3 = 10;
-	TIM2->CCR4 = 2047;		// test
+	TIM2->CCR1 = 2047;
+	TIM2->CCR2 = 150;		// test
 
 	TIM2->CR1 = TIM_CR1_ARPE;	// auto reload register preload enable
 
