@@ -20,6 +20,14 @@
 #include "main.h"
 
 
+#define IMU_ADDR				0x50
+#define IMU_WHO_AM_I_REG		0x00
+#define IMU_ST_RESULT_REG		0x36
+
+#define MOTOR_FWD				0
+#define MOTOR_BACKWD			1
+
+
 // configure system clock to run at 84MHz
 void clock_config();
 
@@ -43,11 +51,14 @@ void uart1_writestr(char * str);
 
 // PWM generation
 void tim2_config();
+void motors_config();
+void set_pwm_leftmotor(uint8_t direction, uint32_t pwm);
+void set_pwm_rightmotor(uint8_t direction, uint32_t pwm);
 
 uint8_t imu_config();
 uint8_t imu_test();
 void imu_read_euler(int16_t * roll_raw, int16_t * pitch_raw, int16_t * heading_raw);
-void convert_euler(int16_t roll_raw, int16_t pitch_raw, int16_t heading_raw, int16_t * roll, int16_t * pitch, int16_t * heading);
+void convert_euler(int16_t roll_raw, int16_t pitch_raw, int16_t heading_raw, float * roll, float * pitch, float * heading);
 
 
 int main(void)
@@ -56,25 +67,25 @@ int main(void)
 	clock_config();
 	i2c1_config();
 	uart1_config(9600);
-	tim2_config();
+	motors_config();
 
 
 	while (!imu_config());
 
 	uart1_writestr("Start...\n\r");
 
-	const float kp = 0.1;
+	const float kp = 0.5;
 	const float ki = 0.01;
 	const float pitch_setpoint = 0;
 
 	float sum_err = 0;
 
-	int i = 0;
 
   while (1)
   {
 
-	  int16_t roll_raw, heading_raw, pitch_raw, roll, heading, pitch;
+	  int16_t roll_raw, heading_raw, pitch_raw;
+	  float roll, heading, pitch;
 	  imu_read_euler(&roll_raw, &pitch_raw, &heading_raw);
 	  convert_euler(roll_raw, pitch_raw, heading_raw, &roll, &pitch, &heading);
 
@@ -86,20 +97,35 @@ int main(void)
 
 	  float controller_out = kp * pitch_err + ki * sum_err;
 
-	  controller_out = abs(controller_out);
+	  // use absolute value of controller to select pwm duty value
+	  // direction of motors is determined by sign of controller_out
+	  float controller_abs = fabs(controller_out);
 
-	  if (controller_out > 500)
-		  controller_out = 500;
+
+	  if (controller_abs > 10)
+		  controller_abs = 10;
+
+
 
 	  // use pwm on EN pins to control speed
 	  // change 1,2 and 3,4 signals for forward/backward
-	  uint16_t pwm_val = round((2048.0 / 500.0) * controller_out);
-	  TIM2->CCR1 = pwm_val;
 
-	  TIM2->CCR2 = i++;
+	  // map function: output = output_start + ((output_end - output_start) / (input_end - input_start)) * (input - input_start)
+	  // input: [0, 500]
+	  // output: [0, 2048]
+	  uint32_t pwm_val = 204.8 * controller_abs;
+//	  uint32_t pwm_val = 100.0 * controller_abs;
 
-	  if (i == 2048)
-		  i = 0;
+	  uint8_t motor_dir;
+
+	  if (controller_out < 0)		motor_dir = MOTOR_BACKWD;
+	  else							motor_dir = MOTOR_FWD;
+
+	  set_pwm_leftmotor(motor_dir, pwm_val);
+	  set_pwm_rightmotor(motor_dir, pwm_val);
+
+	  volatile int i = 0;
+	  for (; i < 85000; i++);		// wait for next fusion data
 
 //	  uart1_writestr("Roll: ");
 //	  uart1_writeint(roll);
@@ -469,8 +495,8 @@ void tim2_config() {
 
 
 	TIM2->ARR = 2048;		// output frequency approx 20.5kHz
-	TIM2->CCR1 = 2047;
-	TIM2->CCR2 = 150;		// test
+	TIM2->CCR1 = 0;			// pwm duty cycle of 0
+	TIM2->CCR2 = 0;
 
 	TIM2->CR1 = TIM_CR1_ARPE;	// auto reload register preload enable
 
@@ -481,70 +507,128 @@ void tim2_config() {
 }
 
 
+void motors_config() {
+
+	tim2_config();
+
+	// left motor inputs are D2 and D3
+	// D2 is PA10
+	// D3 is PB3
+
+	RCC->AHB1ENR |= RCC_AHB1ENR_GPIOAEN |
+					RCC_AHB1ENR_GPIOBEN;
+
+	// configure D2 and D3 as outputs
+	GPIOA->MODER |= GPIO_MODER_MODER10_0;
+	GPIOA->MODER &= ~GPIO_MODER_MODER10_1;
+
+	GPIOB->MODER |= GPIO_MODER_MODER3_0;
+	GPIOB->MODER &= ~GPIO_MODER_MODER3_1;
+
+	// right motor inputs are D4 and D5
+	// D4 is PB5
+	// D5 is PB4
+
+	// configure D4 and D5 as outputs
+	GPIOB->MODER |= GPIO_MODER_MODER4_0 |
+					GPIO_MODER_MODER5_0;
+	GPIOB->MODER &= ~(GPIO_MODER_MODER4_1 |
+					GPIO_MODER_MODER5_1);
+}
+
+
+void set_pwm_leftmotor(uint8_t direction, uint32_t pwm) {
+
+	if (direction == MOTOR_FWD) {
+
+		GPIOA->ODR |= GPIO_ODR_ODR_10;
+		GPIOB->ODR &= ~GPIO_ODR_ODR_3;
+
+	} else {
+
+		GPIOA->ODR &= ~GPIO_ODR_ODR_10;
+		GPIOB->ODR |= GPIO_ODR_ODR_3;
+	}
+
+	TIM2->CCR1 = pwm;
+}
+
+
+void set_pwm_rightmotor(uint8_t direction, uint32_t pwm) {
+
+	if (direction == MOTOR_FWD) {
+
+		GPIOB->ODR |= GPIO_ODR_ODR_4;
+		GPIOB->ODR &= ~GPIO_ODR_ODR_5;
+
+	} else {
+
+		GPIOB->ODR &= ~GPIO_ODR_ODR_4;
+		GPIOB->ODR |= GPIO_ODR_ODR_5;
+	}
+
+	TIM2->CCR2 = pwm;
+}
+
+
 uint8_t imu_config() {
 
-	const uint8_t slave_addr = 0x50;
-	const uint8_t opr_reg = 0x3d;
 
 	while (!imu_test());		// read chip id
 
 	// on restart, configure registers by setting mode to CONFIG
+	const uint8_t opr_reg = 0x3d;
 	const uint8_t opr_mode_config = 0x00;
-	i2c1_writebyte(slave_addr, opr_reg, opr_mode_config);
+	i2c1_writebyte(IMU_ADDR, opr_reg, opr_mode_config);
 
 	// delay >19 ms
 	for (int i = 0; i < 2000000; i++);
 
 	// select Euler angles in units of degrees
 	const uint8_t unit_sel_reg = 0x3b;
-	i2c1_writebyte(slave_addr, unit_sel_reg, 0x80);
+	i2c1_writebyte(IMU_ADDR, unit_sel_reg, 0x80);
 
 	// for current setup, placement P3 is used (from BNO055 datasheet)
 	// thus, AXIS_REMAP = 0x21 and AXIS_SIGN = 0x02
 	const uint8_t axis_map_config_reg = 0x41;
 	const uint8_t axis_map_sign_reg = 0x42;
-	i2c1_writebyte(slave_addr, axis_map_config_reg, 0x21);
-	i2c1_writebyte(slave_addr, axis_map_sign_reg, 0x02);
+	i2c1_writebyte(IMU_ADDR, axis_map_config_reg, 0x21);
+	i2c1_writebyte(IMU_ADDR, axis_map_sign_reg, 0x02);
 
 	// set up fusion sensor mode in OPR_MODE
-	const uint8_t opr_mode_imu = 0x08;
-	i2c1_writebyte(slave_addr, opr_reg, opr_mode_imu);
+	const uint8_t opr_mode_fusion = 0x08;
+	i2c1_writebyte(IMU_ADDR, opr_reg, opr_mode_fusion);
 
 	// delay >7 ms
 	for (int i = 0; i < 2000000; i++);
 
 	// check POST register ST_RESULT
 	// returns 1 if all sensors are working
-	const uint8_t st_result = 0x36;
-	return ((i2c1_readbyte(slave_addr, st_result) & 0x0f) == 0x0f) ? 1 : 0;
+	return ((i2c1_readbyte(IMU_ADDR, IMU_ST_RESULT_REG) & 0x0f) == 0x0f) ? 1 : 0;
 }
 
 
 uint8_t imu_test() {
 
-	uint8_t slave_addr = 0x50;
-	uint8_t who_am_i_addr = 0;
-
 	// returns 1 if correct chip id is read
-	return (i2c1_readbyte(slave_addr, who_am_i_addr) == 0xa0) ? 1 : 0;
+	return (i2c1_readbyte(IMU_ADDR, IMU_WHO_AM_I_REG) == 0xa0) ? 1 : 0;
 }
 
 
 void imu_read_euler(int16_t * roll_raw, int16_t * pitch_raw, int16_t * heading_raw) {
 
 	uint8_t raw_euler[6];			// 6 bytes total for euler angles
-	const uint8_t slave_addr = 0x50;
 	const uint8_t start_addr = 0x1a;		// starting byte is heading LSB
-	i2c1_readburst(slave_addr, start_addr, 6, raw_euler);		// read 6 consecutive bytes
+	i2c1_readburst(IMU_ADDR, start_addr, 6, raw_euler);		// read 6 consecutive bytes
 	*heading_raw = raw_euler[0] | (raw_euler[1] << 8);
 	*roll_raw = raw_euler[2] | (raw_euler[3] << 8);
 	*pitch_raw = raw_euler[4] | (raw_euler[5] << 8);
 }
 
 
-void convert_euler(int16_t roll_raw, int16_t pitch_raw, int16_t heading_raw, int16_t * roll, int16_t * pitch, int16_t * heading) {
+void convert_euler(int16_t roll_raw, int16_t pitch_raw, int16_t heading_raw, float * roll, float * pitch, float * heading) {
 
-	*roll = roll_raw / 16;		// 1 degree = 16 LSB
-	*pitch = pitch_raw / 16;
-	*heading = heading_raw / 16;
+	*roll = roll_raw / 16.0;		// 1 degree = 16 LSB
+	*pitch = pitch_raw / 16.0;
+	*heading = heading_raw / 16.0;
 }
