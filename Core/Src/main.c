@@ -54,6 +54,10 @@ void tim2_config();
 void motors_config();
 void set_pwm_leftmotor(uint8_t direction, uint32_t pwm);
 void set_pwm_rightmotor(uint8_t direction, uint32_t pwm);
+void enable_leftmotor();
+void disable_leftmotor();
+void enable_rightmotor();
+void disable_rightmotor();
 
 uint8_t imu_config();
 uint8_t imu_test();
@@ -66,20 +70,19 @@ int main(void)
 
 	clock_config();
 	i2c1_config();
-	uart1_config(9600);
+//	uart1_config(9600);
 	motors_config();
 
 
 	while (!imu_config());
 
-	uart1_writestr("Start...\n\r");
+//	uart1_writestr("Start...\n\r");
 
-	const float kp = 0.5;
+	const float kp = 1.00;
 	const float ki = 0.01;
 	const float pitch_setpoint = 0;
 
 	float sum_err = 0;
-
 
   while (1)
   {
@@ -105,16 +108,11 @@ int main(void)
 	  if (controller_abs > 10)
 		  controller_abs = 10;
 
-
-
-	  // use pwm on EN pins to control speed
-	  // change 1,2 and 3,4 signals for forward/backward
-
 	  // map function: output = output_start + ((output_end - output_start) / (input_end - input_start)) * (input - input_start)
-	  // input: [0, 500]
-	  // output: [0, 2048]
-	  uint32_t pwm_val = 204.8 * controller_abs;
-//	  uint32_t pwm_val = 100.0 * controller_abs;
+	  // input: [0, 10]
+	  // output: [1000, 1500]
+	  // motors probably won't ever need to run at full speed
+	  uint32_t pwm_val = 1000 + ((1500 - 1000) / (10 - 0)) * (controller_abs - 0);
 
 	  uint8_t motor_dir;
 
@@ -127,15 +125,6 @@ int main(void)
 	  volatile int i = 0;
 	  for (; i < 85000; i++);		// wait for next fusion data
 
-//	  uart1_writestr("Roll: ");
-//	  uart1_writeint(roll);
-//	  uart1_writestr("\t\tPitch: ");
-//	  uart1_writeint(pitch);
-//	  uart1_writestr("\t\tHeading: ");
-//	  uart1_writeint(heading);
-//	  uart1_writebyte('\n');
-//	  uart1_writebyte('\r');
-//	  for (int i = 0; i < 500000; i++);
   }
 }
 
@@ -511,7 +500,9 @@ void motors_config() {
 
 	tim2_config();
 
-	// left motor inputs are D2 and D3
+	// motor enable inputs are D2 and D3
+	// left motor enable is D2
+	// right motor enable is D3
 	// D2 is PA10
 	// D3 is PB3
 
@@ -525,7 +516,9 @@ void motors_config() {
 	GPIOB->MODER |= GPIO_MODER_MODER3_0;
 	GPIOB->MODER &= ~GPIO_MODER_MODER3_1;
 
-	// right motor inputs are D4 and D5
+	// motor direction inputs are D4 and D5
+	// left motor direction is D4
+	// right motor direction is D5
 	// D4 is PB5
 	// D5 is PB4
 
@@ -534,40 +527,73 @@ void motors_config() {
 					GPIO_MODER_MODER5_0;
 	GPIOB->MODER &= ~(GPIO_MODER_MODER4_1 |
 					GPIO_MODER_MODER5_1);
+
+	enable_leftmotor();
+	enable_rightmotor();
 }
 
 
 void set_pwm_leftmotor(uint8_t direction, uint32_t pwm) {
 
+	uint32_t pwm_adjusted = pwm;
+
 	if (direction == MOTOR_FWD) {
 
-		GPIOA->ODR |= GPIO_ODR_ODR_10;
-		GPIOB->ODR &= ~GPIO_ODR_ODR_3;
+		GPIOB->ODR &= ~GPIO_ODR_ODR_5;
 
 	} else {
 
-		GPIOA->ODR &= ~GPIO_ODR_ODR_10;
-		GPIOB->ODR |= GPIO_ODR_ODR_3;
+		GPIOB->ODR |= GPIO_ODR_ODR_5;
+		pwm_adjusted = 2048 - pwm;			// invert duty cycle
 	}
 
-	TIM2->CCR1 = pwm;
+	TIM2->CCR1 = pwm_adjusted;
 }
 
 
 void set_pwm_rightmotor(uint8_t direction, uint32_t pwm) {
 
+	uint32_t pwm_adjusted = pwm;
+
 	if (direction == MOTOR_FWD) {
 
 		GPIOB->ODR |= GPIO_ODR_ODR_4;
-		GPIOB->ODR &= ~GPIO_ODR_ODR_5;
+		pwm_adjusted = 2048 - pwm;			// invert duty cycle
 
 	} else {
 
 		GPIOB->ODR &= ~GPIO_ODR_ODR_4;
-		GPIOB->ODR |= GPIO_ODR_ODR_5;
 	}
 
-	TIM2->CCR2 = pwm;
+	TIM2->CCR2 = pwm_adjusted;
+}
+
+
+void enable_leftmotor() {
+
+	// turn on D2
+	GPIOA->ODR |= GPIO_ODR_OD10;
+}
+
+
+void disable_leftmotor() {
+
+	// turn off D2
+	GPIOA->ODR &= ~GPIO_ODR_OD10;
+}
+
+
+void enable_rightmotor() {
+
+	// turn on D2
+	GPIOB->ODR |= GPIO_ODR_OD3;
+}
+
+
+void disable_rightmotor() {
+
+	// turn off D3
+	GPIOB->ODR &= ~GPIO_ODR_OD3;
 }
 
 
