@@ -76,13 +76,13 @@ int main(void)
 
 	while (!imu_config());
 
-//	uart1_writestr("Start...\n\r");
-
-	const float kp = 1.00;
-	const float ki = 0.01;
+	const float kp = 1.75;
+	const float ki = 0.023;
+	const float kd = 2.5;
 	const float pitch_setpoint = 0;
 
 	float sum_err = 0;
+	float last_err = 0;
 
   while (1)
   {
@@ -95,18 +95,31 @@ int main(void)
 	  // pitch is one we care about
 	  float pitch_err = pitch - pitch_setpoint;
 
+	  // if bot tips over, turn off motors and prevent integral windup
+	  if (fabs(pitch_err) > 40) {
+
+		  disable_leftmotor();
+		  disable_rightmotor();
+		  continue;
+	  }
+	  else {
+
+		  enable_leftmotor();
+		  enable_rightmotor();
+	  }
+
 	  sum_err += pitch_err;
 
 
-	  float controller_out = kp * pitch_err + ki * sum_err;
+	  float controller_out = kp * pitch_err + ki * sum_err + kd * (pitch_err - last_err);
 
 	  // use absolute value of controller to select pwm duty value
 	  // direction of motors is determined by sign of controller_out
 	  float controller_abs = fabs(controller_out);
 
-
-	  if (controller_abs > 10)
-		  controller_abs = 10;
+	  // limit the top of the controller to prevent integral windup
+	  if (controller_abs > 12)
+		  controller_abs = 12;
 
 	  // map function: output = output_start + ((output_end - output_start) / (input_end - input_start)) * (input - input_start)
 	  // input: [0, 10]
@@ -121,6 +134,8 @@ int main(void)
 
 	  set_pwm_leftmotor(motor_dir, pwm_val);
 	  set_pwm_rightmotor(motor_dir, pwm_val);
+
+	  last_err = pitch_err;
 
 	  volatile int i = 0;
 	  for (; i < 85000; i++);		// wait for next fusion data
