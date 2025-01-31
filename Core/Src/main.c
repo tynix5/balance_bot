@@ -76,9 +76,17 @@ int main(void)
 
 	while (!imu_config());
 
-	const float kp = 1.75;
-	const float ki = 0.023;
-	const float kd = 2.5;
+//	const float kp = 1.25;
+//	const float ki = 0.023;
+//	const float kd = 1.75;
+	const float kp = 1;
+	const float ki = 0;
+	const float kd = 0;
+
+	const float max_error = 40;
+	const float max_controller_out = 10;
+
+
 	const float pitch_setpoint = 0;
 
 	float sum_err = 0;
@@ -96,7 +104,7 @@ int main(void)
 	  float pitch_err = pitch - pitch_setpoint;
 
 	  // if bot tips over, turn off motors and prevent integral windup
-	  if (fabs(pitch_err) > 40) {
+	  if (fabs(pitch_err) > max_error) {
 
 		  disable_leftmotor();
 		  disable_rightmotor();
@@ -118,14 +126,22 @@ int main(void)
 	  float controller_abs = fabs(controller_out);
 
 	  // limit the top of the controller to prevent integral windup
-	  if (controller_abs > 12)
-		  controller_abs = 12;
+	  if (controller_abs > max_controller_out)
+		  controller_abs = max_controller_out;
+
+
+	  // weight large errors more than smaller errors
+	  const float power = 1.1;
+	  float sq_controller = pow(controller_abs, power);
+	  const float max_in = pow(max_controller_out, power);
 
 	  // map function: output = output_start + ((output_end - output_start) / (input_end - input_start)) * (input - input_start)
 	  // input: [0, 10]
-	  // output: [1000, 1500]
+	  // output: [900, 2000]
 	  // motors probably won't ever need to run at full speed
-	  uint32_t pwm_val = 1000 + ((1500 - 1000) / (10 - 0)) * (controller_abs - 0);
+	  // motors begin to spin at about 900
+//	  uint32_t pwm_val = 900 + ((2000 - 900) / (10 - 0)) * (controller_abs - 0);
+	  uint32_t pwm_val = 900 + ((2000 - 900) / (max_in - 0)) * (sq_controller - 0);
 
 	  uint8_t motor_dir;
 
@@ -550,16 +566,23 @@ void motors_config() {
 
 void set_pwm_leftmotor(uint8_t direction, uint32_t pwm) {
 
-	uint32_t pwm_adjusted = pwm;
+	uint32_t pwm_adjusted;
+
+	// left motor start spinning at lower duty cycle than right motor
+
+	uint32_t pwm_left_offset = 50;
 
 	if (direction == MOTOR_FWD) {
 
 		GPIOB->ODR &= ~GPIO_ODR_ODR_5;
+//		pwm_adjusted = pwm - pwm_left_offset;
+		pwm_adjusted = pwm;
 
 	} else {
 
 		GPIOB->ODR |= GPIO_ODR_ODR_5;
-		pwm_adjusted = 2048 - pwm;			// invert duty cycle
+//		pwm_adjusted = 2048 - pwm + pwm_left_offset;			// invert duty cycle
+		pwm_adjusted = 2048 - pwm;
 	}
 
 	TIM2->CCR1 = pwm_adjusted;
