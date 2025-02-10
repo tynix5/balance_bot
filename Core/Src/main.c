@@ -59,6 +59,9 @@ void disable_leftmotor();
 void enable_rightmotor();
 void disable_rightmotor();
 
+// 100Hz timer
+void tim5_config();
+
 uint8_t imu_config();
 uint8_t imu_test();
 void imu_read_euler(int16_t * roll_raw, int16_t * pitch_raw, int16_t * heading_raw);
@@ -73,27 +76,26 @@ int main(void)
 //	uart1_config(9600);
 	motors_config();
 
+	tim5_config();
+
 
 	while (!imu_config());
 
-//	const float kp = 1.25;
-//	const float ki = 0.023;
-//	const float kd = 1.75;
-	const float kp = 1;
-	const float ki = 0;
-	const float kd = 0;
 
-	const float max_error = 40;
-	const float max_controller_out = 10;
+	const float kp = 0.98;
+	const float kd = 1.54;
+
+	const float max_error = 30;
+	const float max_controller_out = 9.5;
 
 
 	const float pitch_setpoint = 0;
 
-	float sum_err = 0;
 	float last_err = 0;
 
   while (1)
   {
+	  TIM5->SR &= ~TIM_SR_UIF;			// clear update interrupt flag
 
 	  int16_t roll_raw, heading_raw, pitch_raw;
 	  float roll, heading, pitch;
@@ -116,22 +118,20 @@ int main(void)
 		  enable_rightmotor();
 	  }
 
-	  sum_err += pitch_err;
 
-
-	  float controller_out = kp * pitch_err + ki * sum_err + kd * (pitch_err - last_err);
+	  float controller_out = kp * pitch_err + kd * (pitch_err - last_err);
 
 	  // use absolute value of controller to select pwm duty value
 	  // direction of motors is determined by sign of controller_out
 	  float controller_abs = fabs(controller_out);
 
-	  // limit the top of the controller to prevent integral windup
+	  // limit the top of the controller
 	  if (controller_abs > max_controller_out)
 		  controller_abs = max_controller_out;
 
 
 	  // weight large errors more than smaller errors
-	  const float power = 1.1;
+	  const float power = 1.16;
 	  float sq_controller = pow(controller_abs, power);
 	  const float max_in = pow(max_controller_out, power);
 
@@ -140,21 +140,27 @@ int main(void)
 	  // output: [900, 2000]
 	  // motors probably won't ever need to run at full speed
 	  // motors begin to spin at about 900
-//	  uint32_t pwm_val = 900 + ((2000 - 900) / (10 - 0)) * (controller_abs - 0);
-	  uint32_t pwm_val = 900 + ((2000 - 900) / (max_in - 0)) * (sq_controller - 0);
+	  uint16_t leftmotor_max_pwm = 2000;
+	  uint16_t leftmotor_min_pwm = 750;
+	  uint16_t rightmotor_max_pwm = 2000;
+	  uint16_t rightmotor_min_pwm = 900;
+	  uint32_t left_pwm_val = (uint32_t) (leftmotor_min_pwm + ( ((float)(leftmotor_max_pwm - leftmotor_min_pwm)) / (max_in - 0)) * (sq_controller - 0));
+	  uint32_t right_pwm_val = (uint32_t) (rightmotor_min_pwm + ( ((float)(rightmotor_max_pwm - rightmotor_min_pwm)) / (max_in - 0)) * (sq_controller - 0));
 
 	  uint8_t motor_dir;
 
-	  if (controller_out < 0)		motor_dir = MOTOR_BACKWD;
+	  if (controller_out > 0)		motor_dir = MOTOR_BACKWD;
 	  else							motor_dir = MOTOR_FWD;
 
-	  set_pwm_leftmotor(motor_dir, pwm_val);
-	  set_pwm_rightmotor(motor_dir, pwm_val);
+
+	  set_pwm_leftmotor(motor_dir, left_pwm_val);
+	  set_pwm_rightmotor(motor_dir, right_pwm_val);
 
 	  last_err = pitch_err;
 
-	  volatile int i = 0;
-	  for (; i < 85000; i++);		// wait for next fusion data
+//	  volatile int i = 0;
+//	  for (; i < 100000; i++);		// wait for next fusion data
+	  while (!(TIM5->SR & (TIM_SR_UIF)));		// wait for next fusion data
 
   }
 }
@@ -568,21 +574,15 @@ void set_pwm_leftmotor(uint8_t direction, uint32_t pwm) {
 
 	uint32_t pwm_adjusted;
 
-	// left motor start spinning at lower duty cycle than right motor
-
-	uint32_t pwm_left_offset = 50;
-
 	if (direction == MOTOR_FWD) {
 
-		GPIOB->ODR &= ~GPIO_ODR_ODR_5;
-//		pwm_adjusted = pwm - pwm_left_offset;
-		pwm_adjusted = pwm;
+		GPIOB->ODR |= GPIO_ODR_ODR_5;
+		pwm_adjusted = 2048 - pwm;
 
 	} else {
 
-		GPIOB->ODR |= GPIO_ODR_ODR_5;
-//		pwm_adjusted = 2048 - pwm + pwm_left_offset;			// invert duty cycle
-		pwm_adjusted = 2048 - pwm;
+		GPIOB->ODR &= ~GPIO_ODR_ODR_5;
+		pwm_adjusted = pwm;
 	}
 
 	TIM2->CCR1 = pwm_adjusted;
@@ -591,16 +591,23 @@ void set_pwm_leftmotor(uint8_t direction, uint32_t pwm) {
 
 void set_pwm_rightmotor(uint8_t direction, uint32_t pwm) {
 
-	uint32_t pwm_adjusted = pwm;
+
+	// right motor start spinning at a higher duty cycle than left motor
+	const uint32_t pwm_right_offset_fwd = 0;
+	const uint32_t pwm_right_offset_bkwd = 0;
+
+	uint32_t pwm_adjusted;
+
 
 	if (direction == MOTOR_FWD) {
 
 		GPIOB->ODR |= GPIO_ODR_ODR_4;
-		pwm_adjusted = 2048 - pwm;			// invert duty cycle
+		pwm_adjusted = 2048 - pwm - pwm_right_offset_fwd;			// invert duty cycle
 
 	} else {
 
 		GPIOB->ODR &= ~GPIO_ODR_ODR_4;
+		pwm_adjusted = pwm + pwm_right_offset_bkwd;
 	}
 
 	TIM2->CCR2 = pwm_adjusted;
@@ -635,6 +642,20 @@ void disable_rightmotor() {
 }
 
 
+void tim5_config() {
+
+	RCC->APB1ENR |= RCC_APB1ENR_TIM5EN;		// enable TIM5 clock
+
+	TIM5->PSC = 0;				// /1 prescaler
+	TIM5->ARR = 420000;			// 42MHz clock on APB1, generates a timer overflow at 100Hz
+
+	TIM5->CNT = 0;				// reset counter
+	TIM5->EGR |= TIM_EGR_UG;	// update registers
+
+	TIM5->CR1 |= TIM_CR1_CEN;	// enable counter
+}
+
+
 uint8_t imu_config() {
 
 
@@ -646,7 +667,7 @@ uint8_t imu_config() {
 	i2c1_writebyte(IMU_ADDR, opr_reg, opr_mode_config);
 
 	// delay >19 ms
-	for (int i = 0; i < 2000000; i++);
+	for (volatile int i = 0; i < 2000000; i++);
 
 	// select Euler angles in units of degrees
 	const uint8_t unit_sel_reg = 0x3b;
@@ -664,7 +685,7 @@ uint8_t imu_config() {
 	i2c1_writebyte(IMU_ADDR, opr_reg, opr_mode_fusion);
 
 	// delay >7 ms
-	for (int i = 0; i < 2000000; i++);
+	for (volatile int i = 0; i < 2000000; i++);
 
 	// check POST register ST_RESULT
 	// returns 1 if all sensors are working
