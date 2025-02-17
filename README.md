@@ -32,3 +32,5 @@ In the first revision, the PWM values were quadratically mapped to the system ou
 controller was also removed, as the system would never be fully stable. Using this configuration, the bot was better at balancing, but it still had trouble on hard, smooth surfaces.
 ### Second Revision ###
 Moved back to using a linear controller, this time only PD. Added a multiplier for errors greater than 5 degrees, balances much better on hard surfaces. 
+### Third Revision ###
+Removed multiplier. Decided multiplier's effect was due to low battery voltage. Need to improve physical design before changing any more software.
