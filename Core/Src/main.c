@@ -82,9 +82,8 @@ int main(void)
 	while (!imu_config());
 
 
-	const float kp = 1.21;
-	const float kd = 1.0;
-	float multiplier = 1.0;
+	const float kp = 1.6;
+	const float kd = 0.5;
 
 	const float max_error = 30;
 	const float max_controller_out = 10;
@@ -119,14 +118,8 @@ int main(void)
 		  enable_rightmotor();
 	  }
 
-	  if (fabs(pitch_err) > 5.0) {
-
-		  multiplier = 1.0 + 0.2 * (fabs(pitch_err) - 5.0);
-	  }
-
 
 	  float controller_out = kp * pitch_err + kd * (pitch_err - last_err);
-	  controller_out *= multiplier;
 
 	  // use absolute value of controller to select pwm duty value
 	  // direction of motors is determined by sign of controller_out
@@ -137,22 +130,15 @@ int main(void)
 		  controller_abs = max_controller_out;
 
 
-	  // weight large errors more than smaller errors
-	  const float power = 1;
-	  float sq_controller = pow(controller_abs, power);
-	  const float max_in = pow(max_controller_out, power);
-
 	  // map function: output = output_start + ((output_end - output_start) / (input_end - input_start)) * (input - input_start)
 	  // input: [0, 10]
-	  // output: [900, 2000]
-	  // motors probably won't ever need to run at full speed
-	  // motors begin to spin at about 900
+	  // left motor spins at lower PWM than right motor
 	  uint16_t leftmotor_max_pwm = 2047;
 	  uint16_t leftmotor_min_pwm = 750;
 	  uint16_t rightmotor_max_pwm = 2047;
 	  uint16_t rightmotor_min_pwm = 900;
-	  uint32_t left_pwm_val = (uint32_t) (leftmotor_min_pwm + ( ((float)(leftmotor_max_pwm - leftmotor_min_pwm)) / (max_in - 0)) * (sq_controller - 0));
-	  uint32_t right_pwm_val = (uint32_t) (rightmotor_min_pwm + ( ((float)(rightmotor_max_pwm - rightmotor_min_pwm)) / (max_in - 0)) * (sq_controller - 0));
+	  uint32_t left_pwm_val = (uint32_t) (leftmotor_min_pwm + ( ((float)(leftmotor_max_pwm - leftmotor_min_pwm)) / (max_controller_out - 0)) * (controller_abs - 0));
+	  uint32_t right_pwm_val = (uint32_t) (rightmotor_min_pwm + ( ((float)(rightmotor_max_pwm - rightmotor_min_pwm)) / (max_controller_out - 0)) * (controller_abs - 0));
 
 	  uint8_t motor_dir;
 
@@ -165,7 +151,7 @@ int main(void)
 
 	  last_err = pitch_err;
 
-	  while (!(TIM5->SR & (TIM_SR_UIF)));		// wait for next fusion data
+	  while (!(TIM5->SR & (TIM_SR_UIF)));// wait for next fusion data
 
   }
 }
