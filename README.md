@@ -30,3 +30,5 @@ correlate to its PWM value. Even though the design was not perfect, it functione
 ### First Revision ###
 In the first revision, the PWM values were quadratically mapped to the system output. In other words, smaller errors would not result in the same motor changes as larger errors would. The Integral component of the PID 
 controller was also removed, as the system would never be fully stable. Using this configuration, the bot was better at balancing, but it still had trouble on hard, smooth surfaces.
+### Second Revision ###
+Moved back to using a linear controller, this time only PD. Added a multiplier for errors greater than 5 degrees, balances much better on hard surfaces. 
