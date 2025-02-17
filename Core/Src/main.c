@@ -82,11 +82,12 @@ int main(void)
 	while (!imu_config());
 
 
-	const float kp = 0.98;
-	const float kd = 1.54;
+	const float kp = 1.21;
+	const float kd = 1.0;
+	float multiplier = 1.0;
 
 	const float max_error = 30;
-	const float max_controller_out = 9.5;
+	const float max_controller_out = 10;
 
 
 	const float pitch_setpoint = 0;
@@ -105,7 +106,7 @@ int main(void)
 	  // pitch is one we care about
 	  float pitch_err = pitch - pitch_setpoint;
 
-	  // if bot tips over, turn off motors and prevent integral windup
+	  // if bot tips over, turn off motors
 	  if (fabs(pitch_err) > max_error) {
 
 		  disable_leftmotor();
@@ -118,8 +119,14 @@ int main(void)
 		  enable_rightmotor();
 	  }
 
+	  if (fabs(pitch_err) > 5.0) {
+
+		  multiplier = 1.0 + 0.2 * (fabs(pitch_err) - 5.0);
+	  }
+
 
 	  float controller_out = kp * pitch_err + kd * (pitch_err - last_err);
+	  controller_out *= multiplier;
 
 	  // use absolute value of controller to select pwm duty value
 	  // direction of motors is determined by sign of controller_out
@@ -131,7 +138,7 @@ int main(void)
 
 
 	  // weight large errors more than smaller errors
-	  const float power = 1.16;
+	  const float power = 1;
 	  float sq_controller = pow(controller_abs, power);
 	  const float max_in = pow(max_controller_out, power);
 
@@ -140,9 +147,9 @@ int main(void)
 	  // output: [900, 2000]
 	  // motors probably won't ever need to run at full speed
 	  // motors begin to spin at about 900
-	  uint16_t leftmotor_max_pwm = 2000;
+	  uint16_t leftmotor_max_pwm = 2047;
 	  uint16_t leftmotor_min_pwm = 750;
-	  uint16_t rightmotor_max_pwm = 2000;
+	  uint16_t rightmotor_max_pwm = 2047;
 	  uint16_t rightmotor_min_pwm = 900;
 	  uint32_t left_pwm_val = (uint32_t) (leftmotor_min_pwm + ( ((float)(leftmotor_max_pwm - leftmotor_min_pwm)) / (max_in - 0)) * (sq_controller - 0));
 	  uint32_t right_pwm_val = (uint32_t) (rightmotor_min_pwm + ( ((float)(rightmotor_max_pwm - rightmotor_min_pwm)) / (max_in - 0)) * (sq_controller - 0));
@@ -158,8 +165,6 @@ int main(void)
 
 	  last_err = pitch_err;
 
-//	  volatile int i = 0;
-//	  for (; i < 100000; i++);		// wait for next fusion data
 	  while (!(TIM5->SR & (TIM_SR_UIF)));		// wait for next fusion data
 
   }
@@ -591,23 +596,18 @@ void set_pwm_leftmotor(uint8_t direction, uint32_t pwm) {
 
 void set_pwm_rightmotor(uint8_t direction, uint32_t pwm) {
 
-
-	// right motor start spinning at a higher duty cycle than left motor
-	const uint32_t pwm_right_offset_fwd = 0;
-	const uint32_t pwm_right_offset_bkwd = 0;
-
 	uint32_t pwm_adjusted;
 
 
 	if (direction == MOTOR_FWD) {
 
 		GPIOB->ODR |= GPIO_ODR_ODR_4;
-		pwm_adjusted = 2048 - pwm - pwm_right_offset_fwd;			// invert duty cycle
+		pwm_adjusted = 2048 - pwm;			// invert duty cycle
 
 	} else {
 
 		GPIOB->ODR &= ~GPIO_ODR_ODR_4;
-		pwm_adjusted = pwm + pwm_right_offset_bkwd;
+		pwm_adjusted = pwm;
 	}
 
 	TIM2->CCR2 = pwm_adjusted;
