@@ -1,26 +1,25 @@
 # Balance Bot #
 - 2 wheeled balancing robot centered around the STM32F401RE microcontroller
-- Utilizes BNO055 IMU to read euler angles using I2C interface
-- 5V DC Motors are driven by L293D IC
+- Utilizes BNO055 IMU to determine orientation in space
 
 ## Design ##
-The premise of this bot is actually simple: read a sensor, then adjust motor speed based on the error. The STM32 will read euler angles from the IMU using its inertial measurement mode at a rate of 100 Hz.
-Based on the placement of my IMU, the pitch determines the angle of error. At equilibrium, the pitch will be exactly 0 degrees, and by reading the pitch, the exact error can be determined. This error is fed into a PID control loop
-whose output is then mapped to a range of PWM values, used to drive the motors. To control the direction of the motors, the PWM signal is inverted and the second motor input line is active. The internal clock speed
-of the STM32 is configured to 84 MHz.
+At a top level, this project is fairly straightforward: determine the bot's orientation, then correct it via motors. The STM32 reads euler angles from the IMU using I2C at a rate of 100 Hz. The euler angles are computed by the sensor itself, configured in the "sensor fusion" mode.
+Based on the physical orientation of the sensor itself, the pitch is the angle we are focused on. At equilibrium (in an upright, balanced position), the pitch will read exactly 0 degrees. If the bot were to tilt forwards or backwards, the pitch would read a nonzero number,
+which is interpreted as "error". It is an error in the sense that any we are attempting to stabilize the bot at exactly 0 degrees pitch, so the larger the magnitude of pitch, the larger the angle from equilibirum, the larger the error. This error is fed into a PID control loop
+whose output is then mapped to a range of PWM values, used to drive the motors. The internal clock speed of the STM32 is configured to 84 MHz for the fastest response.
 
 ## Construction ##
 - Initial build is shown below
-- Hand cut and drilled plywood was used for both bases
-- These bases are separated by spacers, and connected using hobby screws and nuts
+- Hand cut and drilled plywood used for construction of frame
+- The two bases are separated by spacers, and connected using hobby screws and nuts
 ![image](https://github.com/user-attachments/assets/075075a5-caa8-4c1e-b2ab-431e65b59f97)
 ![image](https://github.com/user-attachments/assets/7bc06242-e929-4888-a3ab-802111ed4c80)
 ![image](https://github.com/user-attachments/assets/86369cb9-baa2-450e-8b83-71f13cdc9d10)
-- Future designs will be 3D printed
+- Future design will be 3D printed
 
 ## Power ##
-The design is powered by a 9V battery for now. In the future, a LiPo battery will be substituted. The STM32 is powered through the VIN input, and it supplies 5V to the L293D through the onboard regulator. 
-The BNO055 is also powered using the onboard 5V, but the I2C lines are 3.3V tolerant. At max load, each motor draws up to 250 mA. The onboard 5V voltage regulator is a L1117S50 with a max draw of 800 mA, 
+The design is powered by a 9V battery for now. In the future, a LiPo battery will be substituted. The STM32 is powered through the VIN input, and it supplies 5V to the L293D motor driver through the onboard regulator. 
+The BNO055 is also powered using the onboard 5V, even though the I2C lines are 3.3V tolerant. At max load, each motor draws up to 250 mA. The onboard 5V voltage regulator is a L1117S50 with a max draw of 800 mA, 
 so under maximum load, the entire system will draw less than 550 mA.
 
 ## Control Loop ##
