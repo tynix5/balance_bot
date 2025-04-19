@@ -1,19 +1,3 @@
-/**
-  ******************************************************************************
-  * @file           : main.c
-  * @brief          : Main program body
-  ******************************************************************************
-  * @attention
-  *
-  * Copyright (c) 2025 STMicroelectronics.
-  * All rights reserved.
-  *
-  * This software is licensed under terms that can be found in the LICENSE file
-  * in the root directory of this software component.
-  * If no LICENSE file comes with this software, it is provided AS-IS.
-  *
-  ******************************************************************************
-  */
 
 #include <stdlib.h>
 #include <math.h>
@@ -50,7 +34,7 @@ void uart1_writeint(int num);
 void uart1_writestr(char * str);
 
 // PWM generation
-void tim2_config();
+void pwm_config();
 void motors_config();
 void set_pwm_leftmotor(uint8_t direction, uint32_t pwm);
 void set_pwm_rightmotor(uint8_t direction, uint32_t pwm);
@@ -60,7 +44,7 @@ void enable_rightmotor();
 void disable_rightmotor();
 
 // 100Hz timer
-void tim5_config();
+void refresh_tim_config();
 
 uint8_t imu_config();
 uint8_t imu_test();
@@ -73,85 +57,87 @@ int main(void)
 
 	clock_config();
 	i2c1_config();
-//	uart1_config(9600);
 	motors_config();
 
-	tim5_config();
+	refresh_tim_config();
 
-
+	// ensure IMU connected
 	while (!imu_config());
 
 
+	// PID constants
 	const float kp = 1.6;
 	const float kd = 0.5;
+	const float dt = 1 / 100.0;			// 100Hz fusion refresh rate
 
-	const float max_error = 30;
-	const float max_controller_out = 10;
+	// Critical thresholds
+	const float max_err = 30;
+	const float min_err = 0.3;
+	const float max_pid_out = 10;
 
+	// motor imperfections
+	const uint16_t left_max_pwm = 2047;
+	const uint16_t left_min_pwm = 750;
+	const uint16_t right_max_pwm = 2047;
+	const uint16_t right_min_pwm = 900;
+
+	// precompute slopes for map function
+	const float left_slope = (float) (left_max_pwm - left_min_pwm) / max_pid_out;
+	const float right_slope = (float) (right_max_pwm - right_min_pwm) / max_pid_out;
 
 	const float pitch_setpoint = 0;
-
 	float last_err = 0;
 
   while (1)
   {
 	  TIM5->SR &= ~TIM_SR_UIF;			// clear update interrupt flag
+	  while (!(TIM5->SR & (TIM_SR_UIF)));// wait for next fusion data
 
+	  // read orientation
 	  int16_t roll_raw, heading_raw, pitch_raw;
 	  float roll, heading, pitch;
 	  imu_read_euler(&roll_raw, &pitch_raw, &heading_raw);
 	  convert_euler(roll_raw, pitch_raw, heading_raw, &roll, &pitch, &heading);
 
-	  // pitch is one we care about
+	  // pitch determines angle in our case
 	  float pitch_err = pitch - pitch_setpoint;
 
-	  // if bot tips over, turn off motors
-	  if (fabs(pitch_err) > max_error) {
-
-		  disable_leftmotor();
-		  disable_rightmotor();
-		  continue;
-	  }
-	  else {
-
-		  enable_leftmotor();
-		  enable_rightmotor();
-	  }
-
-
-	  float controller_out = kp * pitch_err + kd * (pitch_err - last_err);
+	  float pid_out = kp * pitch_err + kd * (pitch_err - last_err) / dt;
 
 	  // use absolute value of controller to select pwm duty value
-	  // direction of motors is determined by sign of controller_out
-	  float controller_abs = fabs(controller_out);
+	  // direction of motors is determined by sign of pid_out
+	  float pid_abs = fabs(pid_out);
 
 	  // limit the top of the controller
-	  if (controller_abs > max_controller_out)
-		  controller_abs = max_controller_out;
+	  if (pid_abs > max_pid_out)
+		  pid_abs = max_pid_out;
 
 
 	  // map function: output = output_start + ((output_end - output_start) / (input_end - input_start)) * (input - input_start)
 	  // input: [0, 10]
-	  // left motor spins at lower PWM than right motor
-	  uint16_t leftmotor_max_pwm = 2047;
-	  uint16_t leftmotor_min_pwm = 750;
-	  uint16_t rightmotor_max_pwm = 2047;
-	  uint16_t rightmotor_min_pwm = 900;
-	  uint32_t left_pwm_val = (uint32_t) (leftmotor_min_pwm + ( ((float)(leftmotor_max_pwm - leftmotor_min_pwm)) / (max_controller_out - 0)) * (controller_abs - 0));
-	  uint32_t right_pwm_val = (uint32_t) (rightmotor_min_pwm + ( ((float)(rightmotor_max_pwm - rightmotor_min_pwm)) / (max_controller_out - 0)) * (controller_abs - 0));
+	  uint32_t left_pwm = left_slope * pid_abs + left_min_pwm;
+	  uint32_t right_pwm = right_slope * pid_abs + right_min_pwm;
 
 	  uint8_t motor_dir;
 
-	  if (controller_out > 0)		motor_dir = MOTOR_BACKWD;
+	  if (pid_out > 0)				motor_dir = MOTOR_BACKWD;
 	  else							motor_dir = MOTOR_FWD;
 
+	  enable_leftmotor();
+	  enable_rightmotor();
 
-	  set_pwm_leftmotor(motor_dir, left_pwm_val);
-	  set_pwm_rightmotor(motor_dir, right_pwm_val);
+	  // if robot passes critical angle, turn off
+	  if (fabs(pitch_err) > max_err || fabs(pitch_err) < min_err) {
+
+		  set_pwm_leftmotor(motor_dir, 0);
+		  set_pwm_rightmotor(motor_dir, 0);
+		  continue;
+	  }
+
+	  set_pwm_leftmotor(motor_dir, left_pwm);
+	  set_pwm_rightmotor(motor_dir, right_pwm);
 
 	  last_err = pitch_err;
-
-	  while (!(TIM5->SR & (TIM_SR_UIF)));// wait for next fusion data
 
   }
 }
@@ -479,8 +465,9 @@ void uart1_writestr(char * str) {
 }
 
 
-void tim2_config() {
+void pwm_config() {
 
+	// TIM2
 	// frequency determined by TIMx_ARR
 	// duty cycle determined by TIMx_CCRx
 	// Use PA0 and PA1
@@ -511,7 +498,7 @@ void tim2_config() {
 	TIM2->CCER = TIM_CCER_CC1E | TIM_CCER_CC2E;		// active high, output channels enabled
 
 
-	TIM2->ARR = 2048;		// output frequency approx 20.5kHz
+	TIM2->ARR = 1680;		// output frequency 50kHz
 	TIM2->CCR1 = 0;			// pwm duty cycle of 0
 	TIM2->CCR2 = 0;
 
@@ -526,7 +513,7 @@ void tim2_config() {
 
 void motors_config() {
 
-	tim2_config();
+	pwm_config();
 
 	// motor enable inputs are D2 and D3
 	// left motor enable is D2
@@ -628,12 +615,12 @@ void disable_rightmotor() {
 }
 
 
-void tim5_config() {
+void refresh_tim_config() {
 
 	RCC->APB1ENR |= RCC_APB1ENR_TIM5EN;		// enable TIM5 clock
 
 	TIM5->PSC = 0;				// /1 prescaler
-	TIM5->ARR = 420000;			// 42MHz clock on APB1, generates a timer overflow at 100Hz
+	TIM5->ARR = 840000;			// 84MHz clock on APB1 for TIM5, generates a timer overflow at 100Hz
 
 	TIM5->CNT = 0;				// reset counter
 	TIM5->EGR |= TIM_EGR_UG;	// update registers
