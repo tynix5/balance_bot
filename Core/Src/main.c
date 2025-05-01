@@ -2,6 +2,8 @@
 #include <stdlib.h>
 #include <math.h>
 #include "main.h"
+#include "uart1.h"
+#include "i2c1.h"
 
 
 #define IMU_ADDR				0x50
@@ -10,40 +12,21 @@
 
 #define MOTOR_FWD				0
 #define MOTOR_BACKWD			1
+#define MOTOR_LEFT				0
+#define MOTOR_RIGHT				1
 
 
 // configure system clock to run at 84MHz
 void clock_config();
 
-// configure I2C master
-void i2c1_config();
-void i2c1_sw_rst();
-void i2c1_writebyte(uint8_t slave_addr, uint8_t reg_addr, uint8_t byte);
-uint8_t i2c1_readbyte(uint8_t slave_addr, uint8_t reg_addr);
-void i2c1_readburst(uint8_t slave_addr, uint8_t reg_addr, uint8_t len, uint8_t * bytes);
-void i2c1_start();
-void i2c1_request_stop();
-void i2c1_ack();
-void i2c1_nack();
-void i2c1_release();
-
-// debugging
-void uart1_config(uint32_t baud);
-void uart1_writebyte(uint8_t byte);
-void uart1_writeint(int num);
-void uart1_writestr(char * str);
-
 // PWM generation
 void pwm_config();
 void motors_config();
-void set_pwm_leftmotor(uint8_t direction, uint32_t pwm);
-void set_pwm_rightmotor(uint8_t direction, uint32_t pwm);
-void enable_leftmotor();
-void disable_leftmotor();
-void enable_rightmotor();
-void disable_rightmotor();
+void motors_set_speed(uint8_t motor, uint8_t dir, uint16_t pwm);
+void motors_en();
+void motors_dis();
 
-// 100Hz timer
+// 100Hz timer to determine when to read sensor
 void refresh_tim_config();
 
 uint8_t imu_config();
@@ -56,7 +39,6 @@ int main(void)
 {
 
 	clock_config();
-	i2c1_config();
 	motors_config();
 
 	refresh_tim_config();
@@ -66,8 +48,8 @@ int main(void)
 
 
 	// PID constants
-	const float kp = 1.6;
-	const float kd = 0.5;
+	const float kp = 0.6;
+	const float kd = 0.00;
 	const float dt = 1 / 100.0;			// 100Hz fusion refresh rate
 
 	// Critical thresholds
@@ -79,7 +61,7 @@ int main(void)
 	const uint16_t left_max_pwm = 2047;
 	const uint16_t left_min_pwm = 750;
 	const uint16_t right_max_pwm = 2047;
-	const uint16_t right_min_pwm = 900;
+	const uint16_t right_min_pwm = 750;
 
 	// precompute slopes for map function
 	const float left_slope = (float) (left_max_pwm - left_min_pwm) / max_pid_out;
@@ -123,19 +105,16 @@ int main(void)
 	  if (pid_out > 0)				motor_dir = MOTOR_BACKWD;
 	  else							motor_dir = MOTOR_FWD;
 
-	  enable_leftmotor();
-	  enable_rightmotor();
-
 	  // if robot passes critical angle, turn off
 	  if (fabs(pitch_err) > max_err || fabs(pitch_err) < min_err) {
 
-		  set_pwm_leftmotor(motor_dir, 0);
-		  set_pwm_rightmotor(motor_dir, 0);
+		  motors_set_speed(MOTOR_LEFT, motor_dir, 0);
+		  motors_set_speed(MOTOR_RIGHT, motor_dir, 0);
 		  continue;
 	  }
 
-	  set_pwm_leftmotor(motor_dir, left_pwm);
-	  set_pwm_rightmotor(motor_dir, right_pwm);
+	  motors_set_speed(MOTOR_LEFT, motor_dir, left_pwm);
+	  motors_set_speed(MOTOR_RIGHT, motor_dir, right_pwm);
 
 	  last_err = pitch_err;
 
@@ -199,315 +178,59 @@ void clock_config() {
 	while (!((RCC->CFGR) & RCC_CFGR_SWS_1));
 }
 
-
-void i2c1_config() {
-
-	// PB8 is SCL
-	// PB9 is SDA
-	// enable I2C clock before configuring pins
-	RCC->APB1ENR |= RCC_APB1ENR_I2C1EN;			// enable I2C1 clock
-	RCC->AHB1ENR |= RCC_AHB1ENR_GPIOBEN;		// enable GPIO clock
-
-	// before configuring SCL and SDA pins for AF, make sure bus is not busy by clocking out extra
-	// data to slave devices
-	i2c1_release();
-
-
-	// set AF mode for SCL and SDA
-	GPIOB->MODER |= GPIO_MODER_MODE9_1 | GPIO_MODER_MODE8_1;
-	GPIOB->MODER &= ~(GPIO_MODER_MODE9_0 | GPIO_MODER_MODE8_0);
-
-	// set open-drain for both lines
-	GPIOB->OTYPER |= GPIO_OTYPER_OT9 | GPIO_OTYPER_OT8;
-
-	// enable pull ups (already on board)
-
-	// set max output speed for both
-	GPIOB->OSPEEDR |= GPIO_OSPEEDER_OSPEEDR9 | GPIO_OSPEEDER_OSPEEDR8;
-
-	// AF04 for PB8 and PB9 to select I2C1_SCL and I2C1_SDA
-	GPIOB->AFR[1] |= GPIO_AFRH_AFRH0_2 | GPIO_AFRH_AFRH1_2;
-
-
-	// I2C steps in sequence (per data sheet)
-	// 1. Disable peripheral
-	// 2. Program peripheral input clock to generate correct timing
-	// 3. Configure clock control registers
-	// 4. Configure rise time
-	// 5. Enable peripheral
-	// 6. Start bit
-	I2C1->CR1 = 0;		// disable peripheral
-	i2c1_sw_rst();		// reset I2C to clear busy bit
-	I2C1->CR2 = 42;		// configure peripheral input clock freq to 42MHz (APB1 clock)
-
-	// 300kHz fast mode
-	// Since FREQ = 42MHz, tPCLK = 23.8ns
-	// tLOW = 2 * tHIGH
-	// 300kHz = 1 / (tLOW + tHIGH) = 1 / (3 * tHIGH)
-	// tHIGH = 1.11us
-	// tHIGH = CCR * tPCLK
-	// CCR = 46.667
-	I2C1->CCR = I2C_CCR_FS | 47;	// fast mode and set freq to 300kHz
-	// max SCL tRISE is 300ns
-	// tPCLK = 23.8ns
-	// tRISE / tPCLK + 1 = 12.6 + 1 = 13.6
-	I2C1->TRISE = 13;
-
-	I2C1->CR1 |= I2C_CR1_PE;	// enable peripheral
-}
-
-
-void i2c1_sw_rst() {
-
-	// reset I2C1
-	I2C1->CR1 |= I2C_CR1_SWRST;
-	I2C1->CR1 &= ~I2C_CR1_SWRST;
-}
-
-
-void i2c1_writebyte(uint8_t slave_addr, uint8_t reg_addr, uint8_t byte) {
-
-	while (I2C1->SR2 & I2C_SR2_BUSY);
-
-	i2c1_start();
-	I2C1->DR = slave_addr;
-	while (!(I2C1->SR1 & I2C_SR1_ADDR));
-	(void)I2C1->SR2;						// dummy read to clear status bit
-	while (!(I2C1->SR1 & I2C_SR1_TXE));		// data register needs to be empty
-	I2C1->DR = reg_addr;					// set pointer on BNO055
-	while (!(I2C1->SR1 & I2C_SR1_TXE));		// data register needs to be empty
-	I2C1->DR = byte;
-	while (!(I2C1->SR1 & I2C_SR1_TXE));
-	i2c1_request_stop();
-}
-
-
-uint8_t i2c1_readbyte(uint8_t slave_addr, uint8_t reg_addr) {
-
-	while (I2C1->SR2 & I2C_SR2_BUSY);
-
-	i2c1_start();
-	I2C1->DR = slave_addr;
-	while (!(I2C1->SR1 & I2C_SR1_ADDR));
-	(void)I2C1->SR2;						// dummy read to clear status bit
-	while (!(I2C1->SR1 & I2C_SR1_TXE));		// data register needs to be empty
-	I2C1->DR = reg_addr;					// set pointer on BNO055
-	while (!(I2C1->SR1 & I2C_SR1_TXE));		// data register needs to be empty
-
-	// For single byte reads, pg 482 of reference manual "Closing the communication"
-	i2c1_start();
-	I2C1->DR = slave_addr | 0x01;			// read mode
-	while (!(I2C1->SR1 & I2C_SR1_ADDR));
-	i2c1_nack();
-	(void)I2C1->SR2;						// dummy read to clear status bit
-	i2c1_request_stop();
-	while (!(I2C1->SR1 & I2C_SR1_RXNE));	// wait for full data register
-	return I2C1->DR;
-}
-
-
-void i2c1_readburst(uint8_t slave_addr, uint8_t reg_addr, uint8_t len, uint8_t * bytes) {
-
-	if (len == 0)
-		return;
-
-	while (I2C1->SR2 & I2C_SR2_BUSY);
-
-	i2c1_start();
-	I2C1->DR = slave_addr;
-	while (!(I2C1->SR1 & I2C_SR1_ADDR));
-	(void)I2C1->SR2;						// dummy read to clear status bit
-	while (!(I2C1->SR1 & I2C_SR1_TXE));		// data register needs to be empty
-	I2C1->DR = reg_addr;					// set first pointer on BNO055
-	while (!(I2C1->SR1 & I2C_SR1_TXE));		// data register needs to be empty
-
-	i2c1_start();
-	I2C1->DR = slave_addr | 0x01;			// read mode
-	while (!(I2C1->SR1 & I2C_SR1_ADDR));
-
-	// acknowledge next byte if burst >1 byte
-	if (len != 1)
-		(void)I2C1->SR2;
-
-	for (uint8_t i = 0; i < len - 1; i++) {
-
-		i2c1_ack();
-		while (!(I2C1->SR1 & I2C_SR1_RXNE));	// wait for full data register
-		*bytes = I2C1->DR;					// store byte
-		bytes++;							// move pointer
-	}
-
-	i2c1_nack();								// clear ACK bit just after reading second last data byte
-	if (len == 1)
-		(void)I2C1->SR2;
-	i2c1_request_stop();
-	while (!(I2C1->SR1 & I2C_SR1_RXNE));	// wait for full data register
-	*bytes = I2C1->DR;
-}
-
-
-void i2c1_start() {
-
-	I2C1->CR1 |= I2C_CR1_START;
-	while (!(I2C1->SR1 & I2C_SR1_SB));		// wait for start bit generation
-}
-
-void i2c1_request_stop() {
-
-	I2C1->CR1 |= I2C_CR1_STOP;
-}
-
-void i2c1_ack() {
-
-	I2C1->CR1 |= I2C_CR1_ACK;
-}
-
-void i2c1_nack() {
-
-	I2C1->CR1 &= ~I2C_CR1_ACK;
-}
-
-
-void i2c1_release() {
-
-	// set SCL and SDA lines as outputs
-	GPIOB->MODER |= GPIO_MODER_MODER9_0 | GPIO_MODER_MODER8_0;
-	GPIOB->MODER &= ~(GPIO_MODER_MODER9_1 | GPIO_MODER_MODER8_1);
-
-	// output open drain
-	GPIOB->OTYPER |= GPIO_OTYPER_OT9 | GPIO_OTYPER_OT8;
-
-	// set SDA line high, so that after slave releases the SDA and listens for ACK/NACK, it will get NACK
-	GPIOB->ODR |= GPIO_ODR_ODR_9;
-
-	// generate 10 clock pulses on SCL line
-	for (int i = 0; i < 10; i++) {
-
-		GPIOB->ODR |= GPIO_ODR_ODR_8;
-		for (int j = 0; j < 1000; j++)
-			__NOP();
-
-		GPIOB->ODR &= ~GPIO_ODR_ODR_8;
-		for (int j = 0; j < 1000; j++)
-			__NOP();
-	}
-
-	// set SCL high, line should be pulled high when I2C is idle
-	GPIOB->ODR |= GPIO_ODR_ODR_8;
-}
-
-
-void uart1_config(uint32_t baud) {
-
-	// UART TX is PA9 or D8
-
-	// enable clock
-	RCC->AHB1ENR |= RCC_AHB1ENR_GPIOAEN;
-
-	// select alternate function mode for PA9
-	GPIOA->MODER |= GPIO_MODER_MODER9_1;
-	GPIOA->MODER &= ~GPIO_MODER_MODER9_0;
-
-	// select UART_TX1 as AF
-	GPIOA->AFR[1] |= GPIO_AFRH_AFRH1_2 | GPIO_AFRH_AFRH1_1 | GPIO_AFRH_AFRH1_0;
-
-
-	// enable USART1 clock
-	RCC->APB2ENR |= RCC_APB2ENR_USART1EN;
-
-	USART1->CR1 |= USART_CR1_UE;		// USART enable
-	USART1->CR1 &= ~USART_CR1_M;		// 1 start bit, 8 data bits, n stop bits
-	USART1->CR1 &= ~USART_CR1_PCE;		// no parity
-
-	USART1->CR2 = 0;					// 1 stop bit, asynchronous
-
-	// USARTDIV = fCK / (8 * (2 - OVER8) * baud)
-	// fCK = 84MHz (APB2 bus)
-	// Ex. baud = 9600
-	// USARTDIV = 546.875
-	// Mantissa = 546
-	// Fraction = 0.875 * 16 (4 bits for fraction) = 14
-	float usartdiv = (float) 84000000 / (16 * baud);
-	uint16_t mantissa = (uint16_t) usartdiv;
-	uint8_t fraction = (uint8_t) ((usartdiv - mantissa) * 16);
-	USART1->BRR = mantissa << 4 | fraction;
-
-	USART1->CR1 |= USART_CR1_TE;		// enable transmitter
-}
-
-
-void uart1_writebyte(uint8_t byte) {
-
-	while (!(USART1->SR & USART_SR_TXE));		// wait until data register is empty
-	USART1->DR = byte;			// load register
-	while (!(USART1->SR & USART_SR_TC));		// wait until transmission complete
-}
-
-
-void uart1_writeint(int num) {
-
-	if (num < 0)
-		uart1_writebyte('-');
-
-	num = abs(num);
-	int power = floor(log10(num));		// calculate power of 10
-
-	for (int i = pow(10, power); i > 0; i /= 10)
-		uart1_writebyte((num / i) % 10 + '0');
-}
-
-
-void uart1_writestr(char * str) {
-
-	int i = 0;
-	while (str[i] != '\0')
-		uart1_writebyte(str[i++]);
-}
-
-
 void pwm_config() {
 
-	// TIM2
-	// frequency determined by TIMx_ARR
-	// duty cycle determined by TIMx_CCRx
-	// Use PA0 and PA1
-	// PA2 and PA3 are used by USART and must be bridged in order to function
-	// PA0 is TIM2_CH1 --> A0
-	// PA1 is TIM2_CH2 --> A1
-	// TIM2 is a 32 bit counter
-	// must set AF for pins
+	// TIM3 is a 16-bit counter
+	// TIM3_CH1 is PA6 (D12)
+	// TIM3_CH2 is PA7 (D11)
+	// TIM3_CH3 is PB0 (A3)
+	// TIM3_CH4 is PB1 (PIN 24)
+	// CH1 and CH2 are used to drive left motor
+	// CH3 and CH4 are used to drive right motor
 
-	RCC->APB1ENR |= RCC_APB1ENR_TIM2EN;			// enable TIM2 clock
-	RCC->AHB1ENR |= RCC_AHB1ENR_GPIOAEN;		// enable GPIOA clock
+	RCC->APB1ENR |= RCC_APB1ENR_TIM3EN;							// enable TIM3 clock
+	RCC->AHB1ENR |= RCC_AHB1ENR_GPIOBEN | RCC_AHB1ENR_GPIOAEN;	// enable GPIOA and B clock
 
-	// select alternate function mode
-	GPIOA->MODER |= GPIO_MODER_MODER0_1 | GPIO_MODER_MODER1_1;
-	GPIOA->MODER &= ~(GPIO_MODER_MODER0_0 | GPIO_MODER_MODER1_0);
+	// select alternate function mode for PB0 and PB1
+	GPIOB->MODER |= GPIO_MODER_MODER0_1 | GPIO_MODER_MODER1_1;
+	GPIOB->MODER &= ~(GPIO_MODER_MODER0_0 | GPIO_MODER_MODER1_0);
+	// select alternate function mode for PA6 and PA7
+	GPIOA->MODER |= GPIO_MODER_MODER6_1 | GPIO_MODER_MODER7_1;
+	GPIOA->MODER &= ~(GPIO_MODER_MODER6_0 | GPIO_MODER_MODER7_0);
 
-	// alternate function mode 1
-	GPIOA->AFR[0] &= ~(GPIO_AFRL_AFRL0 | GPIO_AFRL_AFRL1);
-	GPIOA->AFR[0] |= GPIO_AFRL_AFRL0_0 | GPIO_AFRL_AFRL1_0;
+	// select alternate function mode 2 for PB0 and PB1
+	GPIOB->AFR[0] &= ~(GPIO_AFRL_AFRL0 | GPIO_AFRL_AFRL1);
+	GPIOB->AFR[0] |= GPIO_AFRL_AFRL0_1 | GPIO_AFRL_AFRL1_1;
+	// select alternate function mode 2 for PA6 and PA7
+	GPIOA->AFR[0] &= ~(GPIO_AFRL_AFRL6 | GPIO_AFRL_AFRL7);
+	GPIOA->AFR[0] |= GPIO_AFRL_AFRL6_1 | GPIO_AFRL_AFRL7_1;
 
-	TIM2->CR1 = 0;		// no clock division, edge aligned, up counter, counter disabled
-	TIM2->PSC = 0;		// /1 prescaler
+	TIM3->CR1 = 0;		// no clock division, edge aligned, up counter, counter disabled
+	TIM3->PSC = 0;		// /1 prescaler
 
-	TIM2->CCMR1 = TIM_CCMR1_OC1M_2 | TIM_CCMR1_OC1M_1;		// configure TIM2_CH1 (PA0) to PWM mode
-	TIM2->CCMR1 |= TIM_CCMR1_OC2M_2 | TIM_CCMR1_OC2M_1;		// configure TIM2_CH2 (PA1) to PWM mode
-	TIM2->CCMR1 |= TIM_CCMR1_OC1PE | TIM_CCMR1_OC2PE;		// output compare 1 and 2 preload enable
+	TIM3->CCMR1 = TIM_CCMR1_OC1M_2 | TIM_CCMR1_OC1M_1;		// configure TIM3_CH1 (PA6) to PWM mode
+	TIM3->CCMR1 |= TIM_CCMR1_OC2M_2 | TIM_CCMR1_OC2M_1;		// configure TIM3_CH2 (PA7) to PWM mode
+	TIM3->CCMR1 |= TIM_CCMR1_OC1PE | TIM_CCMR1_OC2PE;		// output compare 1 and 2 preload enable
 
-	TIM2->CCER = TIM_CCER_CC1E | TIM_CCER_CC2E;		// active high, output channels enabled
+	TIM3->CCMR2 = TIM_CCMR2_OC3M_2 | TIM_CCMR2_OC3M_1;		// configure TIM3_CH3 (PB0) to PWM mode
+	TIM3->CCMR2 |= TIM_CCMR2_OC4M_2 | TIM_CCMR2_OC4M_1;		// configure TIM3_CH4 (PB1) to PWM mode
+	TIM3->CCMR2 |= TIM_CCMR2_OC3PE | TIM_CCMR2_OC4PE;		// preload register enable
+
+	TIM3->CCER = TIM_CCER_CC1E | TIM_CCER_CC2E | TIM_CCER_CC3E | TIM_CCER_CC4E;		// active high, output channels enabled
 
 
-	TIM2->ARR = 1680;		// output frequency 50kHz
-	TIM2->CCR1 = 0;			// pwm duty cycle of 0
-	TIM2->CCR2 = 0;
+	TIM3->ARR = 1680;		// output frequency 50kHz
+	TIM3->CCR1 = 0;			// pwm duty cycle of 0
+	TIM3->CCR2 = 0;
+	TIM3->CCR3 = 0;
+	TIM3->CCR4 = 0;
 
-	TIM2->CR1 = TIM_CR1_ARPE;	// auto reload register preload enable
+	TIM3->CR1 = TIM_CR1_ARPE;	// auto reload register preload enable
 
-	TIM2->EGR = TIM_EGR_UG;		// reinitiliaze counter and update registers
+	TIM3->EGR = TIM_EGR_UG;		// reinitiliaze counter and update registers
 
-	TIM2->CNT = 0;				// reset counter
-	TIM2->CR1 |= TIM_CR1_CEN;	// enable counter
+	TIM3->CNT = 0;				// reset counter
+	TIM3->CR1 |= TIM_CR1_CEN;	// enable counter
 }
 
 
@@ -515,103 +238,62 @@ void motors_config() {
 
 	pwm_config();
 
-	// motor enable inputs are D2 and D3
-	// left motor enable is D2
-	// right motor enable is D3
-	// D2 is PA10
-	// D3 is PB3
+	// DRV8833 sleep is pin D2 (PA10)
+	RCC->AHB1ENR |= RCC_AHB1ENR_GPIOAEN;
 
-	RCC->AHB1ENR |= RCC_AHB1ENR_GPIOAEN |
-					RCC_AHB1ENR_GPIOBEN;
-
-	// configure D2 and D3 as outputs
+	// configure D2 output
 	GPIOA->MODER |= GPIO_MODER_MODER10_0;
 	GPIOA->MODER &= ~GPIO_MODER_MODER10_1;
 
-	GPIOB->MODER |= GPIO_MODER_MODER3_0;
-	GPIOB->MODER &= ~GPIO_MODER_MODER3_1;
-
-	// motor direction inputs are D4 and D5
-	// left motor direction is D4
-	// right motor direction is D5
-	// D4 is PB5
-	// D5 is PB4
-
-	// configure D4 and D5 as outputs
-	GPIOB->MODER |= GPIO_MODER_MODER4_0 |
-					GPIO_MODER_MODER5_0;
-	GPIOB->MODER &= ~(GPIO_MODER_MODER4_1 |
-					GPIO_MODER_MODER5_1);
-
-	enable_leftmotor();
-	enable_rightmotor();
+	motors_en();
 }
 
+void motors_set_speed(uint8_t motor, uint8_t dir, uint16_t pwm) {
 
-void set_pwm_leftmotor(uint8_t direction, uint32_t pwm) {
+	// to set forward PWM on DRV8833, IN1 = PWM, IN2 = 0
+	// to set backward PWM, IN1 = 0, IN2 = PWM
+	// these are for fast decay mode, enabling responsive motors
 
-	uint32_t pwm_adjusted;
+	if (motor == MOTOR_LEFT) {
 
-	if (direction == MOTOR_FWD) {
+		if (dir == MOTOR_FWD) {
 
-		GPIOB->ODR |= GPIO_ODR_ODR_5;
-		pwm_adjusted = 2048 - pwm;
+			TIM3->CCR1 = pwm;
+			TIM3->CCR2 = 0;
+		}
+		else if (dir == MOTOR_BACKWD){
 
-	} else {
-
-		GPIOB->ODR &= ~GPIO_ODR_ODR_5;
-		pwm_adjusted = pwm;
+			TIM3->CCR1 = 0;
+			TIM3->CCR2 = pwm;
+		}
 	}
+	else if (motor == MOTOR_RIGHT) {
 
-	TIM2->CCR1 = pwm_adjusted;
-}
+		if (dir == MOTOR_FWD) {
 
+			TIM3->CCR3 = pwm;
+			TIM3->CCR4 = 0;
+		}
+		else if (dir == MOTOR_BACKWD) {
 
-void set_pwm_rightmotor(uint8_t direction, uint32_t pwm) {
-
-	uint32_t pwm_adjusted;
-
-
-	if (direction == MOTOR_FWD) {
-
-		GPIOB->ODR |= GPIO_ODR_ODR_4;
-		pwm_adjusted = 2048 - pwm;			// invert duty cycle
-
-	} else {
-
-		GPIOB->ODR &= ~GPIO_ODR_ODR_4;
-		pwm_adjusted = pwm;
+			TIM3->CCR3 = 0;
+			TIM3->CCR4 = pwm;
+		}
 	}
-
-	TIM2->CCR2 = pwm_adjusted;
 }
 
 
-void enable_leftmotor() {
+void motors_en() {
 
-	// turn on D2
-	GPIOA->ODR |= GPIO_ODR_OD10;
-}
-
-
-void disable_leftmotor() {
-
-	// turn off D2
+	// turn off PA10 to disable sleep DRV8833
 	GPIOA->ODR &= ~GPIO_ODR_OD10;
 }
 
 
-void enable_rightmotor() {
+void motors_dis() {
 
-	// turn on D2
-	GPIOB->ODR |= GPIO_ODR_OD3;
-}
-
-
-void disable_rightmotor() {
-
-	// turn off D3
-	GPIOB->ODR &= ~GPIO_ODR_OD3;
+	// turn on PA10 to sleep DRV8833
+	GPIOA->ODR |= GPIO_ODR_OD10;
 }
 
 
@@ -631,6 +313,7 @@ void refresh_tim_config() {
 
 uint8_t imu_config() {
 
+	i2c1_config();
 
 	while (!imu_test());		// read chip id
 
