@@ -43,32 +43,34 @@ int main(void)
 
 	refresh_tim_config();
 
-	// ensure IMU connected
+//	// ensure IMU connected
 	while (!imu_config());
 
 
 	// PID constants
-	const float kp = 0.6;
-	const float kd = 0.00;
+	const float kp = 0.63;
+	const float kpos = 2.07;
+	const float kd = 0.016;
 	const float dt = 1 / 100.0;			// 100Hz fusion refresh rate
 
 	// Critical thresholds
-	const float max_err = 30;
-	const float min_err = 0.3;
+	const float critical_angle = 18;	// after 18 degrees, there is no returning
+	const float angle_thresh = 6;
+	const float spike_threshold = 8;
+	const float min_err = 0.05;
 	const float max_pid_out = 10;
 
-	// motor imperfections
-	const uint16_t left_max_pwm = 2047;
-	const uint16_t left_min_pwm = 750;
-	const uint16_t right_max_pwm = 2047;
-	const uint16_t right_min_pwm = 750;
 
-	// precompute slopes for map function
-	const float left_slope = (float) (left_max_pwm - left_min_pwm) / max_pid_out;
-	const float right_slope = (float) (right_max_pwm - right_min_pwm) / max_pid_out;
+	const uint16_t min_pwm = 1025;
+	const uint16_t max_pwm = 1680;
+
+	// pre-compute slope for map function
+	const float slope = (float) (max_pwm - min_pwm) / max_pid_out;
+
 
 	const float pitch_setpoint = 0;
 	float last_err = 0;
+	float pos_integral = 0;
 
   while (1)
   {
@@ -84,7 +86,14 @@ int main(void)
 	  // pitch determines angle in our case
 	  float pitch_err = pitch - pitch_setpoint;
 
-	  float pid_out = kp * pitch_err + kd * (pitch_err - last_err) / dt;
+	  // reset integral after passing critical angle or large spike in pitch readings
+	  if (fabs(pitch_err) > critical_angle || fabs(pitch_err - last_err) > spike_threshold)
+		  pos_integral = 0;
+	  else if (fabs(pitch_err) < angle_thresh)		// for small angles, compute integral
+		  pos_integral += pitch_err * dt;
+
+
+	  float pid_out = kp * pitch_err + kpos * pos_integral + kd * (pitch_err - last_err) / dt;
 
 	  // use absolute value of controller to select pwm duty value
 	  // direction of motors is determined by sign of pid_out
@@ -96,25 +105,25 @@ int main(void)
 
 
 	  // map function: output = output_start + ((output_end - output_start) / (input_end - input_start)) * (input - input_start)
-	  // input: [0, 10]
-	  uint32_t left_pwm = left_slope * pid_abs + left_min_pwm;
-	  uint32_t right_pwm = right_slope * pid_abs + right_min_pwm;
+	  uint32_t pwm = slope * pid_abs + min_pwm;
 
 	  uint8_t motor_dir;
 
 	  if (pid_out > 0)				motor_dir = MOTOR_BACKWD;
 	  else							motor_dir = MOTOR_FWD;
 
+
 	  // if robot passes critical angle, turn off
-	  if (fabs(pitch_err) > max_err || fabs(pitch_err) < min_err) {
+	  if (fabs(pitch_err) > critical_angle || fabs(pitch_err) < min_err) {
 
 		  motors_set_speed(MOTOR_LEFT, motor_dir, 0);
 		  motors_set_speed(MOTOR_RIGHT, motor_dir, 0);
 		  continue;
 	  }
 
-	  motors_set_speed(MOTOR_LEFT, motor_dir, left_pwm);
-	  motors_set_speed(MOTOR_RIGHT, motor_dir, right_pwm);
+	  motors_set_speed(MOTOR_LEFT, motor_dir, pwm);
+	  motors_set_speed(MOTOR_RIGHT, motor_dir, pwm);
+
 
 	  last_err = pitch_err;
 
@@ -252,7 +261,7 @@ void motors_set_speed(uint8_t motor, uint8_t dir, uint16_t pwm) {
 
 	// to set forward PWM on DRV8833, IN1 = PWM, IN2 = 0
 	// to set backward PWM, IN1 = 0, IN2 = PWM
-	// these are for fast decay mode, enabling responsive motors
+	// these are for slow decay mode, enabling responsive motors
 
 	if (motor == MOTOR_LEFT) {
 
@@ -271,13 +280,13 @@ void motors_set_speed(uint8_t motor, uint8_t dir, uint16_t pwm) {
 
 		if (dir == MOTOR_FWD) {
 
-			TIM3->CCR3 = pwm;
-			TIM3->CCR4 = 0;
+			TIM3->CCR4 = pwm;
+			TIM3->CCR3 = 0;
 		}
 		else if (dir == MOTOR_BACKWD) {
 
-			TIM3->CCR3 = 0;
-			TIM3->CCR4 = pwm;
+			TIM3->CCR4 = 0;
+			TIM3->CCR3 = pwm;
 		}
 	}
 }
@@ -285,15 +294,15 @@ void motors_set_speed(uint8_t motor, uint8_t dir, uint16_t pwm) {
 
 void motors_en() {
 
-	// turn off PA10 to disable sleep DRV8833
-	GPIOA->ODR &= ~GPIO_ODR_OD10;
+	// turn on PA10 to disable sleep DRV8833
+	GPIOA->ODR |= GPIO_ODR_OD10;
 }
 
 
 void motors_dis() {
 
-	// turn on PA10 to sleep DRV8833
-	GPIOA->ODR |= GPIO_ODR_OD10;
+	// turn off PA10 to sleep DRV8833
+	GPIOA->ODR &= ~GPIO_ODR_OD10;
 }
 
 
