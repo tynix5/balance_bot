@@ -48,9 +48,9 @@ int main(void)
 
 
 	// PID constants
-	const float kp = 0.63;
-	const float kpos = 2.07;
-	const float kd = 0.016;
+	const float kp = 0.64;
+	const float kpos = 4.5;
+	const float kd = 0.023;
 	const float dt = 1 / 100.0;			// 100Hz fusion refresh rate
 
 	// Critical thresholds
@@ -61,8 +61,8 @@ int main(void)
 	const float max_pid_out = 10;
 
 
-	const uint16_t min_pwm = 1025;
-	const uint16_t max_pwm = 1680;
+	const uint16_t min_pwm = 225;		// minimum speed when motors begin to turn
+	const uint16_t max_pwm = TIM3->ARR;
 
 	// pre-compute slope for map function
 	const float slope = (float) (max_pwm - min_pwm) / max_pid_out;
@@ -72,19 +72,32 @@ int main(void)
 	float last_err = 0;
 	float pos_integral = 0;
 
+	int16_t roll_raw, heading_raw, pitch_raw;
+	float roll, heading, pitch;
+
+	float sensor_err = 0;
+
+	for (int i = 0; i < 100; i++) {
+
+		TIM5->SR &= ~TIM_SR_UIF;			// clear update interrupt flag
+		while (!(TIM5->SR & (TIM_SR_UIF)));// wait for next fusion data
+		imu_read_euler(&roll_raw, &pitch_raw, &heading_raw);
+		convert_euler(roll_raw, pitch_raw, heading_raw, &roll, &pitch, &heading);
+		sensor_err += pitch;
+	}
+	sensor_err /= 100.0;
+
   while (1)
   {
 	  TIM5->SR &= ~TIM_SR_UIF;			// clear update interrupt flag
 	  while (!(TIM5->SR & (TIM_SR_UIF)));// wait for next fusion data
 
 	  // read orientation
-	  int16_t roll_raw, heading_raw, pitch_raw;
-	  float roll, heading, pitch;
 	  imu_read_euler(&roll_raw, &pitch_raw, &heading_raw);
 	  convert_euler(roll_raw, pitch_raw, heading_raw, &roll, &pitch, &heading);
 
 	  // pitch determines angle in our case
-	  float pitch_err = pitch - pitch_setpoint;
+	  float pitch_err = pitch - pitch_setpoint - sensor_err;
 
 	  // reset integral after passing critical angle or large spike in pitch readings
 	  if (fabs(pitch_err) > critical_angle || fabs(pitch_err - last_err) > spike_threshold)
@@ -109,8 +122,8 @@ int main(void)
 
 	  uint8_t motor_dir;
 
-	  if (pid_out > 0)				motor_dir = MOTOR_BACKWD;
-	  else							motor_dir = MOTOR_FWD;
+	  if (pid_out > 0)				motor_dir = MOTOR_FWD;
+	  else							motor_dir = MOTOR_BACKWD;
 
 
 	  // if robot passes critical angle, turn off
@@ -123,7 +136,6 @@ int main(void)
 
 	  motors_set_speed(MOTOR_LEFT, motor_dir, pwm);
 	  motors_set_speed(MOTOR_RIGHT, motor_dir, pwm);
-
 
 	  last_err = pitch_err;
 
@@ -259,34 +271,34 @@ void motors_config() {
 
 void motors_set_speed(uint8_t motor, uint8_t dir, uint16_t pwm) {
 
-	// to set forward PWM on DRV8833, IN1 = PWM, IN2 = 0
-	// to set backward PWM, IN1 = 0, IN2 = PWM
+	// to set forward PWM on DRV8833, IN1 = PWM, IN2 = 1
+	// to set backward PWM, IN1 = 1, IN2 = PWM
 	// these are for slow decay mode, enabling responsive motors
 
 	if (motor == MOTOR_LEFT) {
 
 		if (dir == MOTOR_FWD) {
 
-			TIM3->CCR1 = pwm;
-			TIM3->CCR2 = 0;
+			TIM3->CCR1 = TIM3->ARR - pwm;			// inverse of pwm for slow decay
+			TIM3->CCR2 = TIM3->ARR;
 		}
 		else if (dir == MOTOR_BACKWD){
 
-			TIM3->CCR1 = 0;
-			TIM3->CCR2 = pwm;
+			TIM3->CCR1 = TIM3->ARR;
+			TIM3->CCR2 = TIM3->ARR - pwm;
 		}
 	}
 	else if (motor == MOTOR_RIGHT) {
 
 		if (dir == MOTOR_FWD) {
 
-			TIM3->CCR4 = pwm;
-			TIM3->CCR3 = 0;
+			TIM3->CCR4 = TIM3->ARR - pwm;
+			TIM3->CCR3 = TIM3->ARR;
 		}
 		else if (dir == MOTOR_BACKWD) {
 
-			TIM3->CCR4 = 0;
-			TIM3->CCR3 = pwm;
+			TIM3->CCR4 = TIM3->ARR;
+			TIM3->CCR3 = TIM3->ARR - pwm;
 		}
 	}
 }
