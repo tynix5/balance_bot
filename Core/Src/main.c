@@ -19,20 +19,28 @@
 // configure system clock to run at 84MHz
 void clock_config();
 
-// PWM generation
+// PWM generation and motor control
 void pwm_config();
 void motors_config();
 void motors_set_speed(uint8_t motor, uint8_t dir, uint16_t pwm);
 void motors_en();
 void motors_dis();
 
-// 100Hz timer to determine when to read sensor
+// wheel encoders
+void encoder_config();
+
+// 100Hz refresh rate of IMU
 void refresh_tim_config();
 
+// BNO055 functions
 uint8_t imu_config();
 uint8_t imu_test();
 void imu_read_euler(int16_t * roll_raw, int16_t * pitch_raw, int16_t * heading_raw);
 void convert_euler(int16_t roll_raw, int16_t pitch_raw, int16_t heading_raw, float * roll, float * pitch, float * heading);
+float imu_calibrate();
+
+float constrain(float var, float min, float max);
+uint32_t map(float in, float in_min, float in_max, float out_min, float out_max);
 
 
 int main(void)
@@ -41,84 +49,91 @@ int main(void)
 	clock_config();
 	motors_config();
 
+	encoder_config();
 	refresh_tim_config();
 
 //	// ensure IMU connected
 	while (!imu_config());
 
+	// Encoder PID constants
+	const float encoder_kp = 0;
+	const float encoder_kd = 0;
 
-	// PID constants
-	const float kp = 0.64;
-	const float kpos = 4.5;
-	const float kd = 0.023;
+	// IMU PID constants
+	const float imu_kp = 0.64;
+	const float imu_kd = 0.023;
 	const float dt = 1 / 100.0;			// 100Hz fusion refresh rate
 
 	// Critical thresholds
 	const float critical_angle = 18;	// after 18 degrees, there is no returning
-	const float angle_thresh = 6;
-	const float spike_threshold = 8;
+//	const float angle_thresh = 6;
+//	const float spike_threshold = 8;
 	const float min_err = 0.05;
 	const float max_pid_out = 10;
+
+	// don't select a target pitch greater or less than these values
+	const float max_target_pitch = 8;
+	const float min_target_pitch = -8;
 
 
 	const uint16_t min_pwm = 225;		// minimum speed when motors begin to turn
 	const uint16_t max_pwm = TIM3->ARR;
 
 	// pre-compute slope for map function
-	const float slope = (float) (max_pwm - min_pwm) / max_pid_out;
+//	const float slope = (float) (max_pwm - min_pwm) / max_pid_out;
 
 
-	const float pitch_setpoint = 0;
-	float last_err = 0;
-	float pos_integral = 0;
+//	const float pitch_setpoint = 0;
+//	float pos_integral = 0;
 
 	int16_t roll_raw, heading_raw, pitch_raw;
 	float roll, heading, pitch;
 
-	float sensor_err = 0;
+	float pitch_err, last_pitch_err = 0;
+	int32_t encoder_ticks, last_encoder_ticks = 0;
 
-	for (int i = 0; i < 100; i++) {
+	float sensor_err = imu_calibrate();
 
-		TIM5->SR &= ~TIM_SR_UIF;			// clear update interrupt flag
-		while (!(TIM5->SR & (TIM_SR_UIF)));// wait for next fusion data
-		imu_read_euler(&roll_raw, &pitch_raw, &heading_raw);
-		convert_euler(roll_raw, pitch_raw, heading_raw, &roll, &pitch, &heading);
-		sensor_err += pitch;
-	}
-	sensor_err /= 100.0;
+	while (1)
+	{
 
-  while (1)
-  {
-	  TIM5->SR &= ~TIM_SR_UIF;			// clear update interrupt flag
-	  while (!(TIM5->SR & (TIM_SR_UIF)));// wait for next fusion data
+	  TIM5->SR &= ~TIM_SR_UIF;				// clear update interrupt flag
+	  while (!(TIM5->SR & (TIM_SR_UIF)));	// wait for next fusion data
+
+	  // read encoder error and calculate target pitch
+	  encoder_ticks = TIM2->CNT;
+	  float target_pitch = encoder_kp * encoder_ticks + encoder_kd * (encoder_ticks - last_encoder_ticks) / dt;
+	  target_pitch = constrain(target_pitch, min_target_pitch, max_target_pitch);
 
 	  // read orientation
 	  imu_read_euler(&roll_raw, &pitch_raw, &heading_raw);
 	  convert_euler(roll_raw, pitch_raw, heading_raw, &roll, &pitch, &heading);
 
-	  // pitch determines angle in our case
-	  float pitch_err = pitch - pitch_setpoint - sensor_err;
+	  // error is difference between current pitch and target pitch
+	  pitch_err = pitch - target_pitch - sensor_err;
+
+	  //	  float pitch_err = pitch - pitch_setpoint - sensor_err;
 
 	  // reset integral after passing critical angle or large spike in pitch readings
-	  if (fabs(pitch_err) > critical_angle || fabs(pitch_err - last_err) > spike_threshold)
-		  pos_integral = 0;
-	  else if (fabs(pitch_err) < angle_thresh)		// for small angles, compute integral
-		  pos_integral += pitch_err * dt;
+//	  if (fabs(pitch_err) > critical_angle || fabs(pitch_err - last_err) > spike_threshold)
+//		  pos_integral = 0;
+//	  else if (fabs(pitch_err) < angle_thresh)		// for small angles, compute integral
+//		  pos_integral += pitch_err * dt;
 
 
-	  float pid_out = kp * pitch_err + kpos * pos_integral + kd * (pitch_err - last_err) / dt;
+//	  float pid_out = kp * pitch_err + kpos * pos_integral + kd * (pitch_err - last_err) / dt;
+	  float pid_out = imu_kp * pitch_err + imu_kd * (pitch_err - last_pitch_err) / dt;
 
 	  // use absolute value of controller to select pwm duty value
 	  // direction of motors is determined by sign of pid_out
 	  float pid_abs = fabs(pid_out);
 
 	  // limit the top of the controller
-	  if (pid_abs > max_pid_out)
-		  pid_abs = max_pid_out;
+	  pid_abs = constrain(pid_abs, 0, max_pid_out);
 
 
-	  // map function: output = output_start + ((output_end - output_start) / (input_end - input_start)) * (input - input_start)
-	  uint32_t pwm = slope * pid_abs + min_pwm;
+//	  uint32_t pwm = slope * pid_abs + min_pwm;
+	  uint32_t pwm = map(pid_abs, 0, max_pid_out, min_pwm, max_pwm);
 
 	  uint8_t motor_dir;
 
@@ -127,7 +142,7 @@ int main(void)
 
 
 	  // if robot passes critical angle, turn off
-	  if (fabs(pitch_err) > critical_angle || fabs(pitch_err) < min_err) {
+	  if (fabs(pitch) > critical_angle || fabs(pitch) < min_err) {
 
 		  motors_set_speed(MOTOR_LEFT, motor_dir, 0);
 		  motors_set_speed(MOTOR_RIGHT, motor_dir, 0);
@@ -137,7 +152,8 @@ int main(void)
 	  motors_set_speed(MOTOR_LEFT, motor_dir, pwm);
 	  motors_set_speed(MOTOR_RIGHT, motor_dir, pwm);
 
-	  last_err = pitch_err;
+	  last_pitch_err = pitch_err;
+	  last_encoder_ticks = encoder_ticks;
 
   }
 }
@@ -318,6 +334,36 @@ void motors_dis() {
 }
 
 
+void encoder_config() {
+
+	RCC->APB1ENR |= RCC_APB1ENR_TIM2EN;		// enable TIM2 clock
+	RCC->AHB1ENR |= RCC_AHB1ENR_GPIOAEN;	// enable GPIOA clock
+
+	// alternate function mode on PA0 and PA1
+	GPIOA->MODER |= GPIO_MODER_MODE0_1 | GPIO_MODER_MODE1_1;
+	GPIOA->MODER &= ~(GPIO_MODER_MODE0_0 | GPIO_MODER_MODE1_0);
+
+	// select AF1 for PA0 and PA1 (TIM2_CH1 and TIM2_CH2)
+	GPIOA->AFR[0] &= ~(GPIO_AFRL_AFRL0 | GPIO_AFRL_AFRL1);
+	GPIOA->AFR[0] |= GPIO_AFRL_AFRL0_0 | GPIO_AFRL_AFRL1_0;
+
+	// configure internal pullups for encoder open drain output
+	GPIOA->PUPDR &= ~(GPIO_PUPDR_PUPD0 | GPIO_PUPDR_PUPD1);
+	GPIOA->PUPDR |= GPIO_PUPDR_PUPD0_0 | GPIO_PUPDR_PUPD1_0;
+
+	// encoder mode 3 - counts up/down on both TI1FP1 and TI2FP2 edges depending on other input level
+	TIM2->SMCR = TIM_SMCR_SMS_0 | TIM_SMCR_SMS_1;
+
+	// CC1 and CC2 channels are inputs - IC1 mapped to T1, IC2 mapped to T2
+	TIM2->CCMR1 = TIM_CCMR1_CC2S_0 | TIM_CCMR1_CC1S_0;
+	TIM2->CCER = 0;			// non inverted inputs
+
+	TIM2->ARR = 0xffffffff;		// set ARR to be max of 32-bit counter
+
+	TIM2->CR1 |= TIM_CR1_CEN;		// enable counter
+}
+
+
 void refresh_tim_config() {
 
 	RCC->APB1ENR |= RCC_APB1ENR_TIM5EN;		// enable TIM5 clock
@@ -393,4 +439,44 @@ void convert_euler(int16_t roll_raw, int16_t pitch_raw, int16_t heading_raw, flo
 	*roll = roll_raw / 16.0;		// 1 degree = 16 LSB
 	*pitch = pitch_raw / 16.0;
 	*heading = heading_raw / 16.0;
+}
+
+
+float imu_calibrate() {
+
+	float err = 0;
+
+	int16_t roll_raw, pitch_raw, heading_raw;
+	float roll, pitch, heading;
+
+	// average 100 readings to get error
+	for (int i = 0; i < 100; i++) {
+
+		TIM5->SR &= ~TIM_SR_UIF;				// clear update interrupt flag
+		while (!(TIM5->SR & (TIM_SR_UIF)));		// wait for next fusion data
+		imu_read_euler(&roll_raw, &pitch_raw, &heading_raw);
+		convert_euler(roll_raw, pitch_raw, heading_raw, &roll, &pitch, &heading);
+		err += pitch;
+	}
+
+	return err / 100.0;
+}
+
+
+float constrain(float var, float min, float max) {
+
+	// returns value in range [min, max]
+	if (var > max)
+		return max;
+	else if (var < min)
+		return min;
+	else
+		return var;
+}
+
+
+uint32_t map(float in, float in_min, float in_max, float out_min, float out_max) {
+
+	// map function: output = output_start + ((output_end - output_start) / (input_end - input_start)) * (input - input_start)
+	return (uint32_t) (out_min + ((out_max - out_min) / (in_max - in_min)) * (in - in_min));
 }
