@@ -5,11 +5,12 @@
 #include "uart1.h"
 #include "i2c1.h"
 
-
+// From BNO055 Datasheet
 #define IMU_ADDR				0x50
 #define IMU_WHO_AM_I_REG		0x00
 #define IMU_ST_RESULT_REG		0x36
 
+// Arbitrary Motor constants
 #define MOTOR_FWD				0
 #define MOTOR_BACKWD			1
 #define MOTOR_LEFT				0
@@ -24,7 +25,7 @@ void pwm_config();
 void motors_config();
 void motors_set_speed(uint8_t motor, uint8_t dir, uint16_t pwm);
 void motors_en();
-void motors_dis();
+void motors_dis();			// DRV8833 sleep mode
 
 // wheel encoders
 void encoder_config();
@@ -39,6 +40,7 @@ void imu_read_euler(int16_t * roll_raw, int16_t * pitch_raw, int16_t * heading_r
 void convert_euler(int16_t roll_raw, int16_t pitch_raw, int16_t heading_raw, float * roll, float * pitch, float * heading);
 float imu_calibrate();
 
+// Math functions
 float constrain(float var, float min, float max);
 uint32_t map(float in, float in_min, float in_max, float out_min, float out_max);
 
@@ -52,47 +54,47 @@ int main(void)
 	encoder_config();
 	refresh_tim_config();
 
-//	// ensure IMU connected
+	// ensure IMU connected
 	while (!imu_config());
 
 	// Encoder PID constants
-	const float encoder_kp = 0;
-	const float encoder_kd = 0;
+	const float encoder_kp = 0.00625;
+	const float encoder_ki = 0.0002;
+	const float encoder_kd = 0.00125;
 
 	// IMU PID constants
-	const float imu_kp = 0.64;
-	const float imu_kd = 0.023;
+	const float imu_kp = 0.737;
+	const float imu_kd = 0.04;
 	const float dt = 1 / 100.0;			// 100Hz fusion refresh rate
 
 	// Critical thresholds
 	const float critical_angle = 18;	// after 18 degrees, there is no returning
-//	const float angle_thresh = 6;
-//	const float spike_threshold = 8;
-	const float min_err = 0.05;
-	const float max_pid_out = 10;
+	const float max_imu_pid = 10;
 
 	// don't select a target pitch greater or less than these values
-	const float max_target_pitch = 8;
-	const float min_target_pitch = -8;
+	const float max_target_pitch = 5;
+	const float min_target_pitch = -5;
 
 
 	const uint16_t min_pwm = 225;		// minimum speed when motors begin to turn
-	const uint16_t max_pwm = TIM3->ARR;
-
-	// pre-compute slope for map function
-//	const float slope = (float) (max_pwm - min_pwm) / max_pid_out;
-
-
-//	const float pitch_setpoint = 0;
-//	float pos_integral = 0;
+	const uint16_t max_pwm = TIM3->ARR;	// full duty cycle
 
 	int16_t roll_raw, heading_raw, pitch_raw;
 	float roll, heading, pitch;
 
+	float target_pitch;
 	float pitch_err, last_pitch_err = 0;
+
+	// Encoder variables
+	float encoder_integral = 0;
+	const float max_encoder_integral = 500;
+	const float min_encoder_integral = -500;
+	const int32_t encoder_home = 0;			// bot origin
+	uint8_t encoder_loop_cnt = 0;			// run encoder loop at a rate of ~14Hz instead of 100Hz
 	int32_t encoder_ticks, last_encoder_ticks = 0;
 
-	float sensor_err = imu_calibrate();
+	// Average out 100 readings
+	float sensor_offset = imu_calibrate();
 
 	while (1)
 	{
@@ -100,60 +102,68 @@ int main(void)
 	  TIM5->SR &= ~TIM_SR_UIF;				// clear update interrupt flag
 	  while (!(TIM5->SR & (TIM_SR_UIF)));	// wait for next fusion data
 
-	  // read encoder error and calculate target pitch
-	  encoder_ticks = TIM2->CNT;
-	  float target_pitch = encoder_kp * encoder_ticks + encoder_kd * (encoder_ticks - last_encoder_ticks) / dt;
-	  target_pitch = constrain(target_pitch, min_target_pitch, max_target_pitch);
+	  // Run this loop at ~14Hz to allow time for motors to engage, makes for much smoother balancing
+	  if (++encoder_loop_cnt == 7) {
 
-	  // read orientation
+		  // 768 encoder ticks per wheel revolution (TIM2->CNT will read 768)
+		  // read encoder error and calculate target pitch
+		  // ticks is < 0 when pitch > 0
+		  encoder_ticks = TIM2->CNT - encoder_home;
+
+		  float pitch_pid = encoder_kp * encoder_ticks
+						+ encoder_ki * encoder_integral
+						+ encoder_kd * (encoder_ticks - last_encoder_ticks) / dt;
+
+		  // small errors with give a smooth, linear response, but large errors will taper off
+		  target_pitch = max_target_pitch * tanh(pitch_pid / max_target_pitch);
+
+		  encoder_loop_cnt = 0;
+	  }
+
+
+	  // read orientation and convert to degrees
 	  imu_read_euler(&roll_raw, &pitch_raw, &heading_raw);
 	  convert_euler(roll_raw, pitch_raw, heading_raw, &roll, &pitch, &heading);
 
 	  // error is difference between current pitch and target pitch
-	  pitch_err = pitch - target_pitch - sensor_err;
-
-	  //	  float pitch_err = pitch - pitch_setpoint - sensor_err;
-
-	  // reset integral after passing critical angle or large spike in pitch readings
-//	  if (fabs(pitch_err) > critical_angle || fabs(pitch_err - last_err) > spike_threshold)
-//		  pos_integral = 0;
-//	  else if (fabs(pitch_err) < angle_thresh)		// for small angles, compute integral
-//		  pos_integral += pitch_err * dt;
+	  pitch_err = pitch - target_pitch - sensor_offset;
 
 
-//	  float pid_out = kp * pitch_err + kpos * pos_integral + kd * (pitch_err - last_err) / dt;
-	  float pid_out = imu_kp * pitch_err + imu_kd * (pitch_err - last_pitch_err) / dt;
+	  float imu_pid = imu_kp * pitch_err
+			  	  	  + imu_kd * (pitch_err - last_pitch_err) / dt;
 
 	  // use absolute value of controller to select pwm duty value
 	  // direction of motors is determined by sign of pid_out
-	  float pid_abs = fabs(pid_out);
+	  float imu_pid_abs = fabs(imu_pid);
 
 	  // limit the top of the controller
-	  pid_abs = constrain(pid_abs, 0, max_pid_out);
+	  imu_pid_abs = constrain(imu_pid_abs, 0, max_imu_pid);
 
-
-//	  uint32_t pwm = slope * pid_abs + min_pwm;
-	  uint32_t pwm = map(pid_abs, 0, max_pid_out, min_pwm, max_pwm);
+	  // generate PWM based on PID controller
+	  uint32_t pwm = map(imu_pid_abs, 0, max_imu_pid, min_pwm, max_pwm);
 
 	  uint8_t motor_dir;
 
-	  if (pid_out > 0)				motor_dir = MOTOR_FWD;
+	  if (imu_pid > 0)				motor_dir = MOTOR_FWD;
 	  else							motor_dir = MOTOR_BACKWD;
 
 
 	  // if robot passes critical angle, turn off
-	  if (fabs(pitch) > critical_angle || fabs(pitch) < min_err) {
+	  if (fabs(pitch) > critical_angle) {
 
 		  motors_set_speed(MOTOR_LEFT, motor_dir, 0);
 		  motors_set_speed(MOTOR_RIGHT, motor_dir, 0);
 		  continue;
 	  }
 
+
 	  motors_set_speed(MOTOR_LEFT, motor_dir, pwm);
 	  motors_set_speed(MOTOR_RIGHT, motor_dir, pwm);
 
 	  last_pitch_err = pitch_err;
 	  last_encoder_ticks = encoder_ticks;
+	  encoder_integral += encoder_ticks * dt;
+	  encoder_integral = constrain(encoder_integral, min_encoder_integral, max_encoder_integral);
 
   }
 }
@@ -360,6 +370,7 @@ void encoder_config() {
 
 	TIM2->ARR = 0xffffffff;		// set ARR to be max of 32-bit counter
 
+	TIM2->CNT = 0;					// reset home position
 	TIM2->CR1 |= TIM_CR1_CEN;		// enable counter
 }
 
