@@ -59,13 +59,14 @@ int main(void)
 
 	// Encoder PID constants
 	const float encoder_kp = 0.00625;
-	const float encoder_ki = 0.0002;
-	const float encoder_kd = 0.00125;
+	const float encoder_ki = 0.0000285;
+	const float encoder_kd = 0.00725;
+	const float encoder_dt = 7 / 100.0;
 
 	// IMU PID constants
 	const float imu_kp = 0.737;
 	const float imu_kd = 0.04;
-	const float dt = 1 / 100.0;			// 100Hz fusion refresh rate
+	const float imu_dt = 1 / 100.0;			// 100Hz fusion refresh rate
 
 	// Critical thresholds
 	const float critical_angle = 18;	// after 18 degrees, there is no returning
@@ -112,7 +113,7 @@ int main(void)
 
 		  float pitch_pid = encoder_kp * encoder_ticks
 						+ encoder_ki * encoder_integral
-						+ encoder_kd * (encoder_ticks - last_encoder_ticks) / dt;
+						+ encoder_kd * (encoder_ticks - last_encoder_ticks) / encoder_dt;
 
 		  // small errors with give a smooth, linear response, but large errors will taper off
 		  target_pitch = max_target_pitch * tanh(pitch_pid / max_target_pitch);
@@ -130,7 +131,7 @@ int main(void)
 
 
 	  float imu_pid = imu_kp * pitch_err
-			  	  	  + imu_kd * (pitch_err - last_pitch_err) / dt;
+			  	  	  + imu_kd * (pitch_err - last_pitch_err) / imu_dt;
 
 	  // use absolute value of controller to select pwm duty value
 	  // direction of motors is determined by sign of pid_out
@@ -162,7 +163,7 @@ int main(void)
 
 	  last_pitch_err = pitch_err;
 	  last_encoder_ticks = encoder_ticks;
-	  encoder_integral += encoder_ticks * dt;
+	  encoder_integral += encoder_ticks * encoder_dt;
 	  encoder_integral = constrain(encoder_integral, min_encoder_integral, max_encoder_integral);
 
   }
