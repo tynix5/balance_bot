@@ -931,13 +931,9 @@ int main(void)
 	const float encoder_kp = 0.00625;
  8000b96:	4ba9      	ldr	r3, [pc, #676]	@ (8000e3c <main+0x2c8>)
  8000b98:	66bb      	str	r3, [r7, #104]	@ 0x68
-//	const float encoder_ki = 0.00000285;
-//	const float encoder_kd = 0.000875;
-//	const float encoder_dt = 7 / 100.0;
 	const float encoder_ki = 0.0000285;
  8000b9a:	4ba9      	ldr	r3, [pc, #676]	@ (8000e40 <main+0x2cc>)
  8000b9c:	667b      	str	r3, [r7, #100]	@ 0x64
-//	const float encoder_kd = 0.00875;
 	const float encoder_kd = 0.00725;
  8000b9e:	4ba9      	ldr	r3, [pc, #676]	@ (8000e44 <main+0x2d0>)
  8000ba0:	663b      	str	r3, [r7, #96]	@ 0x60
@@ -1646,7 +1642,7 @@ void motors_config() {
 	pwm_config();
  80010c8:	f7ff ff66 	bl	8000f98 <pwm_config>
 
-	// DRV8833 sleep is pin D2 (PA10)
+	// DRV8833 sleep is pin D3
 	RCC->AHB1ENR |= RCC_AHB1ENR_GPIOAEN;
  80010cc:	4b0a      	ldr	r3, [pc, #40]	@ (80010f8 <motors_config+0x34>)
  80010ce:	6b1b      	ldr	r3, [r3, #48]	@ 0x30
@@ -1654,18 +1650,18 @@ void motors_config() {
  80010d2:	f043 0301 	orr.w	r3, r3, #1
  80010d6:	6313      	str	r3, [r2, #48]	@ 0x30
 
-	// configure D2 output
-	GPIOA->MODER |= GPIO_MODER_MODER10_0;
+	// configure D3 output
+	GPIOA->MODER |= GPIO_MODER_MODER3_0;
  80010d8:	4b08      	ldr	r3, [pc, #32]	@ (80010fc <motors_config+0x38>)
  80010da:	681b      	ldr	r3, [r3, #0]
  80010dc:	4a07      	ldr	r2, [pc, #28]	@ (80010fc <motors_config+0x38>)
- 80010de:	f443 1380 	orr.w	r3, r3, #1048576	@ 0x100000
+ 80010de:	f043 0340 	orr.w	r3, r3, #64	@ 0x40
  80010e2:	6013      	str	r3, [r2, #0]
-	GPIOA->MODER &= ~GPIO_MODER_MODER10_1;
+	GPIOA->MODER &= ~GPIO_MODER_MODER3_1;
  80010e4:	4b05      	ldr	r3, [pc, #20]	@ (80010fc <motors_config+0x38>)
  80010e6:	681b      	ldr	r3, [r3, #0]
  80010e8:	4a04      	ldr	r2, [pc, #16]	@ (80010fc <motors_config+0x38>)
- 80010ea:	f423 1300 	bic.w	r3, r3, #2097152	@ 0x200000
+ 80010ea:	f023 0380 	bic.w	r3, r3, #128	@ 0x80
  80010ee:	6013      	str	r3, [r2, #0]
 
 	motors_en();
@@ -1793,12 +1789,12 @@ void motors_en() {
  800119c:	b480      	push	{r7}
  800119e:	af00      	add	r7, sp, #0
 
-	// turn on PA10 to disable sleep DRV8833
-	GPIOA->ODR |= GPIO_ODR_OD10;
+	// turn on PA3 to disable sleep DRV8833
+	GPIOA->ODR |= GPIO_ODR_OD3;
  80011a0:	4b05      	ldr	r3, [pc, #20]	@ (80011b8 <motors_en+0x1c>)
  80011a2:	695b      	ldr	r3, [r3, #20]
  80011a4:	4a04      	ldr	r2, [pc, #16]	@ (80011b8 <motors_en+0x1c>)
- 80011a6:	f443 6380 	orr.w	r3, r3, #1024	@ 0x400
+ 80011a6:	f043 0308 	orr.w	r3, r3, #8
  80011aa:	6153      	str	r3, [r2, #20]
 }
  80011ac:	bf00      	nop
@@ -1809,8 +1805,8 @@ void motors_en() {
  80011b8:	40020000 	.word	0x40020000
 
 080011bc <encoder_config>:
-	// turn off PA10 to sleep DRV8833
-	GPIOA->ODR &= ~GPIO_ODR_OD10;
+	// turn off PA3 to sleep DRV8833
+	GPIOA->ODR &= ~GPIO_ODR_OD3;
 }
 
 

@@ -286,12 +286,12 @@ void motors_config() {
 
 	pwm_config();
 
-	// DRV8833 sleep is pin D2 (PA10)
+	// DRV8833 sleep is pin D3
 	RCC->AHB1ENR |= RCC_AHB1ENR_GPIOAEN;
 
-	// configure D2 output
-	GPIOA->MODER |= GPIO_MODER_MODER10_0;
-	GPIOA->MODER &= ~GPIO_MODER_MODER10_1;
+	// configure D3 output
+	GPIOA->MODER |= GPIO_MODER_MODER3_0;
+	GPIOA->MODER &= ~GPIO_MODER_MODER3_1;
 
 	motors_en();
 }
@@ -333,15 +333,15 @@ void motors_set_speed(uint8_t motor, uint8_t dir, uint16_t pwm) {
 
 void motors_en() {
 
-	// turn on PA10 to disable sleep DRV8833
-	GPIOA->ODR |= GPIO_ODR_OD10;
+	// turn on PA3 to disable sleep DRV8833
+	GPIOA->ODR |= GPIO_ODR_OD3;
 }
 
 
 void motors_dis() {
 
-	// turn off PA10 to sleep DRV8833
-	GPIOA->ODR &= ~GPIO_ODR_OD10;
+	// turn off PA3 to sleep DRV8833
+	GPIOA->ODR &= ~GPIO_ODR_OD3;
 }
 
 
