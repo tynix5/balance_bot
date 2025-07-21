@@ -1,7 +1,7 @@
 # Balance Bot #
 - 2 wheeled balancing robot centered around the STM32F401RE microcontroller
 - Utilizes BNO055 IMU to determine orientation in space
-- WIP: Utilize motor encoders to maintain position
+- Utilizes motor encoders to maintain position
 
 ## Design ##
 At a top level, this project is fairly straightforward: determine the bot's orientation relative to equilibrium, then correct it via motors. The STM32 reads euler angles, computed using the sensor's "sensor fusion" mode, from the IMU using I2C at a rate of 100 Hz.
@@ -23,6 +23,16 @@ is mapped to a range of PWM values, used to drive the motors. The internal clock
 ![image](https://github.com/user-attachments/assets/6cdc571f-60e5-4613-ada9-d4600b4a5d50)
 - BNO055, DRV8833, and MPM3160 are mounted below STM32 using double sided tape and screws
 
+## Schematic ##
+<img width="1601" height="1103" alt="balance_bot_schematic_rev1_1" src="https://github.com/user-attachments/assets/18b9eab6-4fc1-437f-80e2-892e35b5dfc6" />
+
+
+## PCB Design ##
+- After completing the initial project, I decided to design a PCB to clean it up
+- The first revision had an improper pinout for the PMOS and missing vias for the ground plane on the 3.3V regulator
+<img width="2151" height="1010" alt="balance_bot_pcb_rev1_1" src="https://github.com/user-attachments/assets/f8dc81c8-621c-4766-92f2-eec753ae330c" />
+- Revision 1.1
+
 
 ## Power ##
 ### Initial Design ###
@@ -42,6 +52,6 @@ In the first revision, the PWM values were quadratically mapped to the system ou
 controller was also removed, as the system would never be fully stable. Using this configuration, the bot was better at balancing, but it still had trouble on hard, smooth surfaces.
 ### Second Revision ###
 Moved back to a linear controller, adding an integral term to account for linear position. Significant improvement in balance, but drifts out of its original position.
-### Third Revision (WIP) ###
+### Third Revision ###
 Adding 2 Hall Effect sensors on motor shaft to create a quadrature encoder. This will be used to keep the bot from drifting forwards or backwards. A separate PID controller is used to determine the target pitch based on how far the bot has moved (using encoder), 
 and the PID controller for the IMU will calculate motor speed and direction based on its current pitch relative to the target pitch.
