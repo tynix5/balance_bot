@@ -25,17 +25,20 @@ is mapped to a range of PWM values, used to drive the motors. The internal clock
 ![IMG_4760](https://github.com/user-attachments/assets/c5746626-72c1-4f61-9e55-ce039aea54a6)
 
 ![IMG_4761](https://github.com/user-attachments/assets/63964f8c-9544-4f92-bc71-355c948efdf6)
+
 - BNO055, DRV8833, and MPM3160 are mounted below STM32 using double sided tape and screws
 
 ## Schematic ##
-<img width="1601" height="1103" alt="balance_bot_schematic_rev1_1" src="https://github.com/user-attachments/assets/2e7df985-37b4-4256-8642-d7b7d921b203" />
+<img width="1800" height="1236" alt="balance_bot_schematic_rev1_2" src="https://github.com/user-attachments/assets/baffed60-1463-4d13-aa16-f9a8d333b3b0" />
 
 
 ## PCB Design ##
 - After completing the initial project, I decided to design a PCB to clean it up
-- The first revision had an improper pinout for the PMOS and missing vias for the ground plane on the 3.3V regulator
-<img width="2151" height="1010" alt="balance_bot_pcb_rev1_1" src="https://github.com/user-attachments/assets/62312bdf-24bb-401a-9253-7d4a052e2e5d" />
-- Revision 1.1
+- Rev 1.1 fixed Rev 1.0 improper pinout for the PMOS and missing vias for the ground plane on the +3.3V regulator
+- Rev 1.1 caused a BNO055 sensor to fry due to back EMF; Rev 1.2 moved sensor supply to +3.3V and added 100uF decoupling cap on +5V rails for extra isolation
+- Rev 1.2 could be improved using VIN rails for motor power and limiting motor voltage in software using PWM
+<img width="2109" height="996" alt="balance_bot_pcb_rev1_2" src="https://github.com/user-attachments/assets/09be0087-69a4-47cf-9654-d05b666cd263" />
+- Revision 1.2
 
 
 ## Power ##
