@@ -13,24 +13,28 @@ is mapped to a range of PWM values, used to drive the motors. The internal clock
 - Initial build is shown below
 - Hand cut and drilled plywood used for construction of frame
 - The two bases are separated by spacers, and connected using hobby screws and nuts
-![image](https://github.com/user-attachments/assets/075075a5-caa8-4c1e-b2ab-431e65b59f97)
-![image](https://github.com/user-attachments/assets/7bc06242-e929-4888-a3ab-802111ed4c80)
-![image](https://github.com/user-attachments/assets/86369cb9-baa2-450e-8b83-71f13cdc9d10)
+
+![IMG_4705](https://github.com/user-attachments/assets/ff6cd8bb-00a0-4934-b249-c4d20f78a818)
+![IMG_4707](https://github.com/user-attachments/assets/79d5e728-3fc7-4af4-a859-5b4ae82541d0)
+![IMG_4706](https://github.com/user-attachments/assets/18cc2f01-16d4-49ee-a3eb-085e845e61c1)
+
 ### First Revision ###
 - 3D Printed Design
-![image](https://github.com/user-attachments/assets/c4c70c7a-f9c3-4ebe-b838-47490d968acc)
-![image](https://github.com/user-attachments/assets/eeff3b18-019c-4ae9-9f4b-d152b0c3dbe6)
-![image](https://github.com/user-attachments/assets/6cdc571f-60e5-4613-ada9-d4600b4a5d50)
+<img width="1100" height="1149" alt="image" src="https://github.com/user-attachments/assets/bd338e7f-eef7-4729-82c4-5a9378328fe4" />
+
+![IMG_4760](https://github.com/user-attachments/assets/c5746626-72c1-4f61-9e55-ce039aea54a6)
+
+![IMG_4761](https://github.com/user-attachments/assets/63964f8c-9544-4f92-bc71-355c948efdf6)
 - BNO055, DRV8833, and MPM3160 are mounted below STM32 using double sided tape and screws
 
 ## Schematic ##
-<img width="1601" height="1103" alt="balance_bot_schematic_rev1_1" src="https://github.com/user-attachments/assets/18b9eab6-4fc1-437f-80e2-892e35b5dfc6" />
+<img width="1601" height="1103" alt="balance_bot_schematic_rev1_1" src="https://github.com/user-attachments/assets/2e7df985-37b4-4256-8642-d7b7d921b203" />
 
 
 ## PCB Design ##
 - After completing the initial project, I decided to design a PCB to clean it up
 - The first revision had an improper pinout for the PMOS and missing vias for the ground plane on the 3.3V regulator
-<img width="2151" height="1010" alt="balance_bot_pcb_rev1_1" src="https://github.com/user-attachments/assets/f8dc81c8-621c-4766-92f2-eec753ae330c" />
+<img width="2151" height="1010" alt="balance_bot_pcb_rev1_1" src="https://github.com/user-attachments/assets/62312bdf-24bb-401a-9253-7d4a052e2e5d" />
 - Revision 1.1
 
 
