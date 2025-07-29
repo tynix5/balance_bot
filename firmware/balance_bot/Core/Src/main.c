@@ -5,7 +5,10 @@
 #include "i2c1.h"
 
 // From BNO055 Datasheet
-#define IMU_ADDR				0x50
+// this IMU address is for the genuine BNO055
+//#define IMU_ADDR				0x50
+// this IMU address is for the clone
+#define IMU_ADDR				0x52
 #define IMU_WHO_AM_I_REG		0x00
 #define IMU_ST_RESULT_REG		0x36
 
@@ -125,6 +128,7 @@ int main(void)
 	  imu_read_euler(&roll_raw, &pitch_raw, &heading_raw);
 	  convert_euler(roll_raw, pitch_raw, heading_raw, &roll, &pitch, &heading);
 
+
 	  // error is difference between current pitch and target pitch
 	  pitch_err = pitch - target_pitch - sensor_offset;
 
@@ -164,7 +168,6 @@ int main(void)
 	  last_encoder_ticks = encoder_ticks;
 	  encoder_integral += encoder_ticks * encoder_dt;
 	  encoder_integral = constrain(encoder_integral, min_encoder_integral, max_encoder_integral);
-
   }
 }
 

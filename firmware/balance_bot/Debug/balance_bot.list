@@ -35,17 +35,17 @@ Idx Name          Size      VMA       LMA       File off  Algn
                   CONTENTS, READONLY, DEBUGGING, OCTETS
  15 .debug_rnglists 000001e8  00000000  00000000  00006b50  2**0
                   CONTENTS, READONLY, DEBUGGING, OCTETS
- 16 .debug_macro  00028f34  00000000  00000000  00006d38  2**0
+ 16 .debug_macro  00028247  00000000  00000000  00006d38  2**0
                   CONTENTS, READONLY, DEBUGGING, OCTETS
- 17 .debug_line   00003819  00000000  00000000  0002fc6c  2**0
+ 17 .debug_line   000037f1  00000000  00000000  0002ef7f  2**0
                   CONTENTS, READONLY, DEBUGGING, OCTETS
- 18 .debug_str    000ae834  00000000  00000000  00033485  2**0
+ 18 .debug_str    000ae663  00000000  00000000  00032770  2**0
                   CONTENTS, READONLY, DEBUGGING, OCTETS
- 19 .comment      00000086  00000000  00000000  000e1cb9  2**0
+ 19 .comment      00000043  00000000  00000000  000e0dd3  2**0
                   CONTENTS, READONLY
- 20 .debug_frame  00000e08  00000000  00000000  000e1d40  2**2
+ 20 .debug_frame  00000e08  00000000  00000000  000e0e18  2**2
                   CONTENTS, READONLY, DEBUGGING, OCTETS
- 21 .debug_line_str 0000007a  00000000  00000000  000e2b48  2**0
+ 21 .debug_line_str 00000070  00000000  00000000  000e1c20  2**0
                   CONTENTS, READONLY, DEBUGGING, OCTETS
 
 Disassembly of section .text:
@@ -1123,6 +1123,7 @@ int main(void)
  8000cf2:	4623      	mov	r3, r4
  8000cf4:	f000 fb80 	bl	80013f8 <convert_euler>
 
+
 	  // error is difference between current pitch and target pitch
 	  pitch_err = pitch - target_pitch - sensor_offset;
  8000cf8:	ed97 7a01 	vldr	s14, [r7, #4]
@@ -1277,7 +1278,6 @@ int main(void)
  8000e78:	00000000 	.word	0x00000000
 
 08000e7c <clock_config>:
-
   }
 }
 
@@ -1987,7 +1987,7 @@ uint8_t imu_config() {
  80012de:	7bba      	ldrb	r2, [r7, #14]
  80012e0:	7bfb      	ldrb	r3, [r7, #15]
  80012e2:	4619      	mov	r1, r3
- 80012e4:	2050      	movs	r0, #80	@ 0x50
+ 80012e4:	2052      	movs	r0, #82	@ 0x52
  80012e6:	f000 fa5b 	bl	80017a0 <i2c1_writebyte>
 
 	// delay >19 ms
@@ -2011,7 +2011,7 @@ uint8_t imu_config() {
  8001302:	7b7b      	ldrb	r3, [r7, #13]
  8001304:	2280      	movs	r2, #128	@ 0x80
  8001306:	4619      	mov	r1, r3
- 8001308:	2050      	movs	r0, #80	@ 0x50
+ 8001308:	2052      	movs	r0, #82	@ 0x52
  800130a:	f000 fa49 	bl	80017a0 <i2c1_writebyte>
 
 	// for current setup, placement P3 is used (from BNO055 datasheet)
@@ -2026,13 +2026,13 @@ uint8_t imu_config() {
  8001316:	7b3b      	ldrb	r3, [r7, #12]
  8001318:	2221      	movs	r2, #33	@ 0x21
  800131a:	4619      	mov	r1, r3
- 800131c:	2050      	movs	r0, #80	@ 0x50
+ 800131c:	2052      	movs	r0, #82	@ 0x52
  800131e:	f000 fa3f 	bl	80017a0 <i2c1_writebyte>
 	i2c1_writebyte(IMU_ADDR, axis_map_sign_reg, 0x02);
  8001322:	7afb      	ldrb	r3, [r7, #11]
  8001324:	2202      	movs	r2, #2
  8001326:	4619      	mov	r1, r3
- 8001328:	2050      	movs	r0, #80	@ 0x50
+ 8001328:	2052      	movs	r0, #82	@ 0x52
  800132a:	f000 fa39 	bl	80017a0 <i2c1_writebyte>
 
 	// set up fusion sensor mode in OPR_MODE
@@ -2043,7 +2043,7 @@ uint8_t imu_config() {
  8001332:	7aba      	ldrb	r2, [r7, #10]
  8001334:	7bfb      	ldrb	r3, [r7, #15]
  8001336:	4619      	mov	r1, r3
- 8001338:	2050      	movs	r0, #80	@ 0x50
+ 8001338:	2052      	movs	r0, #82	@ 0x52
  800133a:	f000 fa31 	bl	80017a0 <i2c1_writebyte>
 
 	// delay >7 ms
@@ -2063,7 +2063,7 @@ uint8_t imu_config() {
 	// returns 1 if all sensors are working
 	return ((i2c1_readbyte(IMU_ADDR, IMU_ST_RESULT_REG) & 0x0f) == 0x0f) ? 1 : 0;
  8001352:	2136      	movs	r1, #54	@ 0x36
- 8001354:	2050      	movs	r0, #80	@ 0x50
+ 8001354:	2052      	movs	r0, #82	@ 0x52
  8001356:	f000 fa65 	bl	8001824 <i2c1_readbyte>
  800135a:	4603      	mov	r3, r0
  800135c:	f003 030f 	and.w	r3, r3, #15
@@ -2090,7 +2090,7 @@ uint8_t imu_test() {
 	// returns 1 if correct chip id is read
 	return (i2c1_readbyte(IMU_ADDR, IMU_WHO_AM_I_REG) == 0xa0) ? 1 : 0;
  800137c:	2100      	movs	r1, #0
- 800137e:	2050      	movs	r0, #80	@ 0x50
+ 800137e:	2052      	movs	r0, #82	@ 0x52
  8001380:	f000 fa50 	bl	8001824 <i2c1_readbyte>
  8001384:	4603      	mov	r3, r0
  8001386:	2ba0      	cmp	r3, #160	@ 0xa0
@@ -2121,7 +2121,7 @@ void imu_read_euler(int16_t * roll_raw, int16_t * pitch_raw, int16_t * heading_r
  80013a4:	f107 0310 	add.w	r3, r7, #16
  80013a8:	7df9      	ldrb	r1, [r7, #23]
  80013aa:	2206      	movs	r2, #6
- 80013ac:	2050      	movs	r0, #80	@ 0x50
+ 80013ac:	2052      	movs	r0, #82	@ 0x52
  80013ae:	f000 fa8d 	bl	80018cc <i2c1_readburst>
 	*heading_raw = raw_euler[0] | (raw_euler[1] << 8);
  80013b2:	7c3b      	ldrb	r3, [r7, #16]
@@ -2710,62 +2710,114 @@ __weak void HAL_IncTick(void)
  80016d8:	20000070 	.word	0x20000070
 
 080016dc <i2c1_config>:
+#include "stm32f4xx_hal.h"
+#include "i2c1.h"
+#include <stdint.h>
+
+void i2c1_config()
+{
  80016dc:	b580      	push	{r7, lr}
  80016de:	af00      	add	r7, sp, #0
+	// PB8 is SCL
+	// PB9 is SDA
+	// enable I2C clock before configuring pins
+	RCC->APB1ENR |= RCC_APB1ENR_I2C1EN;			// enable I2C1 clock
  80016e0:	4b21      	ldr	r3, [pc, #132]	@ (8001768 <i2c1_config+0x8c>)
  80016e2:	6c1b      	ldr	r3, [r3, #64]	@ 0x40
  80016e4:	4a20      	ldr	r2, [pc, #128]	@ (8001768 <i2c1_config+0x8c>)
  80016e6:	f443 1300 	orr.w	r3, r3, #2097152	@ 0x200000
  80016ea:	6413      	str	r3, [r2, #64]	@ 0x40
+	RCC->AHB1ENR |= RCC_AHB1ENR_GPIOBEN;		// enable GPIO clock
  80016ec:	4b1e      	ldr	r3, [pc, #120]	@ (8001768 <i2c1_config+0x8c>)
  80016ee:	6b1b      	ldr	r3, [r3, #48]	@ 0x30
  80016f0:	4a1d      	ldr	r2, [pc, #116]	@ (8001768 <i2c1_config+0x8c>)
  80016f2:	f043 0302 	orr.w	r3, r3, #2
  80016f6:	6313      	str	r3, [r2, #48]	@ 0x30
+
+	// before configuring SCL and SDA pins for AF, make sure bus is not busy by clocking out extra
+	// data to slave devices
+	i2c1_release();
  80016f8:	f000 f9b0 	bl	8001a5c <i2c1_release>
+
+
+	// set AF mode for SCL and SDA
+	GPIOB->MODER |= GPIO_MODER_MODE9_1 | GPIO_MODER_MODE8_1;
  80016fc:	4b1b      	ldr	r3, [pc, #108]	@ (800176c <i2c1_config+0x90>)
  80016fe:	681b      	ldr	r3, [r3, #0]
  8001700:	4a1a      	ldr	r2, [pc, #104]	@ (800176c <i2c1_config+0x90>)
  8001702:	f443 2320 	orr.w	r3, r3, #655360	@ 0xa0000
  8001706:	6013      	str	r3, [r2, #0]
+	GPIOB->MODER &= ~(GPIO_MODER_MODE9_0 | GPIO_MODER_MODE8_0);
  8001708:	4b18      	ldr	r3, [pc, #96]	@ (800176c <i2c1_config+0x90>)
  800170a:	681b      	ldr	r3, [r3, #0]
  800170c:	4a17      	ldr	r2, [pc, #92]	@ (800176c <i2c1_config+0x90>)
  800170e:	f423 23a0 	bic.w	r3, r3, #327680	@ 0x50000
  8001712:	6013      	str	r3, [r2, #0]
+
+	// set open-drain for both lines
+	GPIOB->OTYPER |= GPIO_OTYPER_OT9 | GPIO_OTYPER_OT8;
  8001714:	4b15      	ldr	r3, [pc, #84]	@ (800176c <i2c1_config+0x90>)
  8001716:	685b      	ldr	r3, [r3, #4]
  8001718:	4a14      	ldr	r2, [pc, #80]	@ (800176c <i2c1_config+0x90>)
  800171a:	f443 7340 	orr.w	r3, r3, #768	@ 0x300
  800171e:	6053      	str	r3, [r2, #4]
+
+	// enable pull ups (already on board)
+
+	// set max output speed for both
+	GPIOB->OSPEEDR |= GPIO_OSPEEDER_OSPEEDR9 | GPIO_OSPEEDER_OSPEEDR8;
  8001720:	4b12      	ldr	r3, [pc, #72]	@ (800176c <i2c1_config+0x90>)
  8001722:	689b      	ldr	r3, [r3, #8]
  8001724:	4a11      	ldr	r2, [pc, #68]	@ (800176c <i2c1_config+0x90>)
  8001726:	f443 2370 	orr.w	r3, r3, #983040	@ 0xf0000
  800172a:	6093      	str	r3, [r2, #8]
+
+	// AF04 for PB8 and PB9 to select I2C1_SCL and I2C1_SDA
+	GPIOB->AFR[1] |= GPIO_AFRH_AFRH0_2 | GPIO_AFRH_AFRH1_2;
  800172c:	4b0f      	ldr	r3, [pc, #60]	@ (800176c <i2c1_config+0x90>)
  800172e:	6a5b      	ldr	r3, [r3, #36]	@ 0x24
  8001730:	4a0e      	ldr	r2, [pc, #56]	@ (800176c <i2c1_config+0x90>)
  8001732:	f043 0344 	orr.w	r3, r3, #68	@ 0x44
  8001736:	6253      	str	r3, [r2, #36]	@ 0x24
+	// 2. Program peripheral input clock to generate correct timing
+	// 3. Configure clock control registers
+	// 4. Configure rise time
+	// 5. Enable peripheral
+	// 6. Start bit
+	I2C1->CR1 = 0;		// disable peripheral
  8001738:	4b0d      	ldr	r3, [pc, #52]	@ (8001770 <i2c1_config+0x94>)
  800173a:	2200      	movs	r2, #0
  800173c:	601a      	str	r2, [r3, #0]
+	i2c1_sw_rst();		// reset I2C to clear busy bit
  800173e:	f000 f819 	bl	8001774 <i2c1_sw_rst>
+	I2C1->CR2 = 42;		// configure peripheral input clock freq to 42MHz (APB1 clock)
  8001742:	4b0b      	ldr	r3, [pc, #44]	@ (8001770 <i2c1_config+0x94>)
  8001744:	222a      	movs	r2, #42	@ 0x2a
  8001746:	605a      	str	r2, [r3, #4]
+	// tLOW = 2 * tHIGH
+	// 300kHz = 1 / (tLOW + tHIGH) = 1 / (3 * tHIGH)
+	// tHIGH = 1.11us
+	// tHIGH = CCR * tPCLK
+	// CCR = 46.667
+	I2C1->CCR = I2C_CCR_FS | 47;	// fast mode and set freq to 300kHz
  8001748:	4b09      	ldr	r3, [pc, #36]	@ (8001770 <i2c1_config+0x94>)
  800174a:	f248 022f 	movw	r2, #32815	@ 0x802f
  800174e:	61da      	str	r2, [r3, #28]
+	// max SCL tRISE is 300ns
+	// tPCLK = 23.8ns
+	// tRISE / tPCLK + 1 = 12.6 + 1 = 13.6
+	I2C1->TRISE = 13;
  8001750:	4b07      	ldr	r3, [pc, #28]	@ (8001770 <i2c1_config+0x94>)
  8001752:	220d      	movs	r2, #13
  8001754:	621a      	str	r2, [r3, #32]
+
+	I2C1->CR1 |= I2C_CR1_PE;	// enable peripheral
  8001756:	4b06      	ldr	r3, [pc, #24]	@ (8001770 <i2c1_config+0x94>)
  8001758:	681b      	ldr	r3, [r3, #0]
  800175a:	4a05      	ldr	r2, [pc, #20]	@ (8001770 <i2c1_config+0x94>)
  800175c:	f043 0301 	orr.w	r3, r3, #1
  8001760:	6013      	str	r3, [r2, #0]
+}
  8001762:	bf00      	nop
  8001764:	bd80      	pop	{r7, pc}
  8001766:	bf00      	nop
@@ -2774,18 +2826,25 @@ __weak void HAL_IncTick(void)
  8001770:	40005400 	.word	0x40005400
 
 08001774 <i2c1_sw_rst>:
+
+void i2c1_sw_rst()
+{
  8001774:	b480      	push	{r7}
  8001776:	af00      	add	r7, sp, #0
+	// reset I2C1
+	I2C1->CR1 |= I2C_CR1_SWRST;
  8001778:	4b08      	ldr	r3, [pc, #32]	@ (800179c <i2c1_sw_rst+0x28>)
  800177a:	681b      	ldr	r3, [r3, #0]
  800177c:	4a07      	ldr	r2, [pc, #28]	@ (800179c <i2c1_sw_rst+0x28>)
  800177e:	f443 4300 	orr.w	r3, r3, #32768	@ 0x8000
  8001782:	6013      	str	r3, [r2, #0]
+	I2C1->CR1 &= ~I2C_CR1_SWRST;
  8001784:	4b05      	ldr	r3, [pc, #20]	@ (800179c <i2c1_sw_rst+0x28>)
  8001786:	681b      	ldr	r3, [r3, #0]
  8001788:	4a04      	ldr	r2, [pc, #16]	@ (800179c <i2c1_sw_rst+0x28>)
  800178a:	f423 4300 	bic.w	r3, r3, #32768	@ 0x8000
  800178e:	6013      	str	r3, [r2, #0]
+}
  8001790:	bf00      	nop
  8001792:	46bd      	mov	sp, r7
  8001794:	f85d 7b04 	ldr.w	r7, [sp], #4
@@ -2794,6 +2853,9 @@ __weak void HAL_IncTick(void)
  800179c:	40005400 	.word	0x40005400
 
 080017a0 <i2c1_writebyte>:
+
+void i2c1_writebyte(uint8_t slave_addr, uint8_t reg_addr, uint8_t byte)
+{
  80017a0:	b580      	push	{r7, lr}
  80017a2:	b082      	sub	sp, #8
  80017a4:	af00      	add	r7, sp, #0
@@ -2803,49 +2865,62 @@ __weak void HAL_IncTick(void)
  80017ac:	71bb      	strb	r3, [r7, #6]
  80017ae:	4613      	mov	r3, r2
  80017b0:	717b      	strb	r3, [r7, #5]
+	while (I2C1->SR2 & I2C_SR2_BUSY);
  80017b2:	bf00      	nop
  80017b4:	4b1a      	ldr	r3, [pc, #104]	@ (8001820 <i2c1_writebyte+0x80>)
  80017b6:	699b      	ldr	r3, [r3, #24]
  80017b8:	f003 0302 	and.w	r3, r3, #2
  80017bc:	2b00      	cmp	r3, #0
  80017be:	d1f9      	bne.n	80017b4 <i2c1_writebyte+0x14>
+
+	i2c1_start();
  80017c0:	f000 f904 	bl	80019cc <i2c1_start>
+	I2C1->DR = slave_addr;
  80017c4:	4a16      	ldr	r2, [pc, #88]	@ (8001820 <i2c1_writebyte+0x80>)
  80017c6:	79fb      	ldrb	r3, [r7, #7]
  80017c8:	6113      	str	r3, [r2, #16]
+	while (!(I2C1->SR1 & I2C_SR1_ADDR));
  80017ca:	bf00      	nop
  80017cc:	4b14      	ldr	r3, [pc, #80]	@ (8001820 <i2c1_writebyte+0x80>)
  80017ce:	695b      	ldr	r3, [r3, #20]
  80017d0:	f003 0302 	and.w	r3, r3, #2
  80017d4:	2b00      	cmp	r3, #0
  80017d6:	d0f9      	beq.n	80017cc <i2c1_writebyte+0x2c>
+	(void)I2C1->SR2;						// dummy read to clear status bit
  80017d8:	4b11      	ldr	r3, [pc, #68]	@ (8001820 <i2c1_writebyte+0x80>)
  80017da:	699b      	ldr	r3, [r3, #24]
+	while (!(I2C1->SR1 & I2C_SR1_TXE));		// data register needs to be empty
  80017dc:	bf00      	nop
  80017de:	4b10      	ldr	r3, [pc, #64]	@ (8001820 <i2c1_writebyte+0x80>)
  80017e0:	695b      	ldr	r3, [r3, #20]
  80017e2:	f003 0380 	and.w	r3, r3, #128	@ 0x80
  80017e6:	2b00      	cmp	r3, #0
  80017e8:	d0f9      	beq.n	80017de <i2c1_writebyte+0x3e>
+	I2C1->DR = reg_addr;					// set pointer on BNO055
  80017ea:	4a0d      	ldr	r2, [pc, #52]	@ (8001820 <i2c1_writebyte+0x80>)
  80017ec:	79bb      	ldrb	r3, [r7, #6]
  80017ee:	6113      	str	r3, [r2, #16]
+	while (!(I2C1->SR1 & I2C_SR1_TXE));		// data register needs to be empty
  80017f0:	bf00      	nop
  80017f2:	4b0b      	ldr	r3, [pc, #44]	@ (8001820 <i2c1_writebyte+0x80>)
  80017f4:	695b      	ldr	r3, [r3, #20]
  80017f6:	f003 0380 	and.w	r3, r3, #128	@ 0x80
  80017fa:	2b00      	cmp	r3, #0
  80017fc:	d0f9      	beq.n	80017f2 <i2c1_writebyte+0x52>
+	I2C1->DR = byte;
  80017fe:	4a08      	ldr	r2, [pc, #32]	@ (8001820 <i2c1_writebyte+0x80>)
  8001800:	797b      	ldrb	r3, [r7, #5]
  8001802:	6113      	str	r3, [r2, #16]
+	while (!(I2C1->SR1 & I2C_SR1_TXE));
  8001804:	bf00      	nop
  8001806:	4b06      	ldr	r3, [pc, #24]	@ (8001820 <i2c1_writebyte+0x80>)
  8001808:	695b      	ldr	r3, [r3, #20]
  800180a:	f003 0380 	and.w	r3, r3, #128	@ 0x80
  800180e:	2b00      	cmp	r3, #0
  8001810:	d0f9      	beq.n	8001806 <i2c1_writebyte+0x66>
+	i2c1_request_stop();
  8001812:	f000 f8f3 	bl	80019fc <i2c1_request_stop>
+}
  8001816:	bf00      	nop
  8001818:	3708      	adds	r7, #8
  800181a:	46bd      	mov	sp, r7
@@ -2854,6 +2929,9 @@ __weak void HAL_IncTick(void)
  8001820:	40005400 	.word	0x40005400
 
 08001824 <i2c1_readbyte>:
+
+uint8_t i2c1_readbyte(uint8_t slave_addr, uint8_t reg_addr)
+{
  8001824:	b580      	push	{r7, lr}
  8001826:	b082      	sub	sp, #8
  8001828:	af00      	add	r7, sp, #0
@@ -2862,64 +2940,84 @@ __weak void HAL_IncTick(void)
  800182e:	71fb      	strb	r3, [r7, #7]
  8001830:	4613      	mov	r3, r2
  8001832:	71bb      	strb	r3, [r7, #6]
+	while (I2C1->SR2 & I2C_SR2_BUSY);
  8001834:	bf00      	nop
  8001836:	4b24      	ldr	r3, [pc, #144]	@ (80018c8 <i2c1_readbyte+0xa4>)
  8001838:	699b      	ldr	r3, [r3, #24]
  800183a:	f003 0302 	and.w	r3, r3, #2
  800183e:	2b00      	cmp	r3, #0
  8001840:	d1f9      	bne.n	8001836 <i2c1_readbyte+0x12>
+
+	i2c1_start();
  8001842:	f000 f8c3 	bl	80019cc <i2c1_start>
+	I2C1->DR = slave_addr;
  8001846:	4a20      	ldr	r2, [pc, #128]	@ (80018c8 <i2c1_readbyte+0xa4>)
  8001848:	79fb      	ldrb	r3, [r7, #7]
  800184a:	6113      	str	r3, [r2, #16]
+	while (!(I2C1->SR1 & I2C_SR1_ADDR));
  800184c:	bf00      	nop
  800184e:	4b1e      	ldr	r3, [pc, #120]	@ (80018c8 <i2c1_readbyte+0xa4>)
  8001850:	695b      	ldr	r3, [r3, #20]
  8001852:	f003 0302 	and.w	r3, r3, #2
  8001856:	2b00      	cmp	r3, #0
  8001858:	d0f9      	beq.n	800184e <i2c1_readbyte+0x2a>
+	(void)I2C1->SR2;						// dummy read to clear status bit
  800185a:	4b1b      	ldr	r3, [pc, #108]	@ (80018c8 <i2c1_readbyte+0xa4>)
  800185c:	699b      	ldr	r3, [r3, #24]
+	while (!(I2C1->SR1 & I2C_SR1_TXE));		// data register needs to be empty
  800185e:	bf00      	nop
  8001860:	4b19      	ldr	r3, [pc, #100]	@ (80018c8 <i2c1_readbyte+0xa4>)
  8001862:	695b      	ldr	r3, [r3, #20]
  8001864:	f003 0380 	and.w	r3, r3, #128	@ 0x80
  8001868:	2b00      	cmp	r3, #0
  800186a:	d0f9      	beq.n	8001860 <i2c1_readbyte+0x3c>
+	I2C1->DR = reg_addr;					// set pointer on BNO055
  800186c:	4a16      	ldr	r2, [pc, #88]	@ (80018c8 <i2c1_readbyte+0xa4>)
  800186e:	79bb      	ldrb	r3, [r7, #6]
  8001870:	6113      	str	r3, [r2, #16]
+	while (!(I2C1->SR1 & I2C_SR1_TXE));		// data register needs to be empty
  8001872:	bf00      	nop
  8001874:	4b14      	ldr	r3, [pc, #80]	@ (80018c8 <i2c1_readbyte+0xa4>)
  8001876:	695b      	ldr	r3, [r3, #20]
  8001878:	f003 0380 	and.w	r3, r3, #128	@ 0x80
  800187c:	2b00      	cmp	r3, #0
  800187e:	d0f9      	beq.n	8001874 <i2c1_readbyte+0x50>
+
+	// For single byte reads, pg 482 of reference manual "Closing the communication"
+	i2c1_start();
  8001880:	f000 f8a4 	bl	80019cc <i2c1_start>
+	I2C1->DR = slave_addr | 0x01;			// read mode
  8001884:	79fb      	ldrb	r3, [r7, #7]
  8001886:	f043 0301 	orr.w	r3, r3, #1
  800188a:	b2da      	uxtb	r2, r3
  800188c:	4b0e      	ldr	r3, [pc, #56]	@ (80018c8 <i2c1_readbyte+0xa4>)
  800188e:	611a      	str	r2, [r3, #16]
+	while (!(I2C1->SR1 & I2C_SR1_ADDR));
  8001890:	bf00      	nop
  8001892:	4b0d      	ldr	r3, [pc, #52]	@ (80018c8 <i2c1_readbyte+0xa4>)
  8001894:	695b      	ldr	r3, [r3, #20]
  8001896:	f003 0302 	and.w	r3, r3, #2
  800189a:	2b00      	cmp	r3, #0
  800189c:	d0f9      	beq.n	8001892 <i2c1_readbyte+0x6e>
+	i2c1_nack();
  800189e:	f000 f8cd 	bl	8001a3c <i2c1_nack>
+	(void)I2C1->SR2;						// dummy read to clear status bit
  80018a2:	4b09      	ldr	r3, [pc, #36]	@ (80018c8 <i2c1_readbyte+0xa4>)
  80018a4:	699b      	ldr	r3, [r3, #24]
+	i2c1_request_stop();
  80018a6:	f000 f8a9 	bl	80019fc <i2c1_request_stop>
+	while (!(I2C1->SR1 & I2C_SR1_RXNE));	// wait for full data register
  80018aa:	bf00      	nop
  80018ac:	4b06      	ldr	r3, [pc, #24]	@ (80018c8 <i2c1_readbyte+0xa4>)
  80018ae:	695b      	ldr	r3, [r3, #20]
  80018b0:	f003 0340 	and.w	r3, r3, #64	@ 0x40
  80018b4:	2b00      	cmp	r3, #0
  80018b6:	d0f9      	beq.n	80018ac <i2c1_readbyte+0x88>
+	return I2C1->DR;
  80018b8:	4b03      	ldr	r3, [pc, #12]	@ (80018c8 <i2c1_readbyte+0xa4>)
  80018ba:	691b      	ldr	r3, [r3, #16]
  80018bc:	b2db      	uxtb	r3, r3
+}
  80018be:	4618      	mov	r0, r3
  80018c0:	3708      	adds	r7, #8
  80018c2:	46bd      	mov	sp, r7
@@ -2928,6 +3026,9 @@ __weak void HAL_IncTick(void)
  80018c8:	40005400 	.word	0x40005400
 
 080018cc <i2c1_readburst>:
+
+void i2c1_readburst(uint8_t slave_addr, uint8_t reg_addr, uint8_t len, uint8_t * bytes)
+{
  80018cc:	b580      	push	{r7, lr}
  80018ce:	b084      	sub	sp, #16
  80018d0:	af00      	add	r7, sp, #0
@@ -2938,77 +3039,105 @@ __weak void HAL_IncTick(void)
  80018da:	71bb      	strb	r3, [r7, #6]
  80018dc:	4613      	mov	r3, r2
  80018de:	717b      	strb	r3, [r7, #5]
+	if (len == 0)
  80018e0:	797b      	ldrb	r3, [r7, #5]
  80018e2:	2b00      	cmp	r3, #0
  80018e4:	d06b      	beq.n	80019be <i2c1_readburst+0xf2>
+		return;
+
+	while (I2C1->SR2 & I2C_SR2_BUSY);
  80018e6:	bf00      	nop
  80018e8:	4b37      	ldr	r3, [pc, #220]	@ (80019c8 <i2c1_readburst+0xfc>)
  80018ea:	699b      	ldr	r3, [r3, #24]
  80018ec:	f003 0302 	and.w	r3, r3, #2
  80018f0:	2b00      	cmp	r3, #0
  80018f2:	d1f9      	bne.n	80018e8 <i2c1_readburst+0x1c>
+
+	i2c1_start();
  80018f4:	f000 f86a 	bl	80019cc <i2c1_start>
+	I2C1->DR = slave_addr;
  80018f8:	4a33      	ldr	r2, [pc, #204]	@ (80019c8 <i2c1_readburst+0xfc>)
  80018fa:	79fb      	ldrb	r3, [r7, #7]
  80018fc:	6113      	str	r3, [r2, #16]
+	while (!(I2C1->SR1 & I2C_SR1_ADDR));
  80018fe:	bf00      	nop
  8001900:	4b31      	ldr	r3, [pc, #196]	@ (80019c8 <i2c1_readburst+0xfc>)
  8001902:	695b      	ldr	r3, [r3, #20]
  8001904:	f003 0302 	and.w	r3, r3, #2
  8001908:	2b00      	cmp	r3, #0
  800190a:	d0f9      	beq.n	8001900 <i2c1_readburst+0x34>
+	(void)I2C1->SR2;						// dummy read to clear status bit
  800190c:	4b2e      	ldr	r3, [pc, #184]	@ (80019c8 <i2c1_readburst+0xfc>)
  800190e:	699b      	ldr	r3, [r3, #24]
+	while (!(I2C1->SR1 & I2C_SR1_TXE));		// data register needs to be empty
  8001910:	bf00      	nop
  8001912:	4b2d      	ldr	r3, [pc, #180]	@ (80019c8 <i2c1_readburst+0xfc>)
  8001914:	695b      	ldr	r3, [r3, #20]
  8001916:	f003 0380 	and.w	r3, r3, #128	@ 0x80
  800191a:	2b00      	cmp	r3, #0
  800191c:	d0f9      	beq.n	8001912 <i2c1_readburst+0x46>
+	I2C1->DR = reg_addr;					// set first pointer on BNO055
  800191e:	4a2a      	ldr	r2, [pc, #168]	@ (80019c8 <i2c1_readburst+0xfc>)
  8001920:	79bb      	ldrb	r3, [r7, #6]
  8001922:	6113      	str	r3, [r2, #16]
+	while (!(I2C1->SR1 & I2C_SR1_TXE));		// data register needs to be empty
  8001924:	bf00      	nop
  8001926:	4b28      	ldr	r3, [pc, #160]	@ (80019c8 <i2c1_readburst+0xfc>)
  8001928:	695b      	ldr	r3, [r3, #20]
  800192a:	f003 0380 	and.w	r3, r3, #128	@ 0x80
  800192e:	2b00      	cmp	r3, #0
  8001930:	d0f9      	beq.n	8001926 <i2c1_readburst+0x5a>
+
+	i2c1_start();
  8001932:	f000 f84b 	bl	80019cc <i2c1_start>
+	I2C1->DR = slave_addr | 0x01;			// read mode
  8001936:	79fb      	ldrb	r3, [r7, #7]
  8001938:	f043 0301 	orr.w	r3, r3, #1
  800193c:	b2da      	uxtb	r2, r3
  800193e:	4b22      	ldr	r3, [pc, #136]	@ (80019c8 <i2c1_readburst+0xfc>)
  8001940:	611a      	str	r2, [r3, #16]
+	while (!(I2C1->SR1 & I2C_SR1_ADDR));
  8001942:	bf00      	nop
  8001944:	4b20      	ldr	r3, [pc, #128]	@ (80019c8 <i2c1_readburst+0xfc>)
  8001946:	695b      	ldr	r3, [r3, #20]
  8001948:	f003 0302 	and.w	r3, r3, #2
  800194c:	2b00      	cmp	r3, #0
  800194e:	d0f9      	beq.n	8001944 <i2c1_readburst+0x78>
+
+	// acknowledge next byte if burst >1 byte
+	if (len != 1)
  8001950:	797b      	ldrb	r3, [r7, #5]
  8001952:	2b01      	cmp	r3, #1
  8001954:	d001      	beq.n	800195a <i2c1_readburst+0x8e>
+		(void)I2C1->SR2;
  8001956:	4b1c      	ldr	r3, [pc, #112]	@ (80019c8 <i2c1_readburst+0xfc>)
  8001958:	699b      	ldr	r3, [r3, #24]
+
+	for (uint8_t i = 0; i < len - 1; i++) {
  800195a:	2300      	movs	r3, #0
  800195c:	73fb      	strb	r3, [r7, #15]
  800195e:	e013      	b.n	8001988 <i2c1_readburst+0xbc>
+
+		i2c1_ack();
  8001960:	f000 f85c 	bl	8001a1c <i2c1_ack>
+		while (!(I2C1->SR1 & I2C_SR1_RXNE));	// wait for full data register
  8001964:	bf00      	nop
  8001966:	4b18      	ldr	r3, [pc, #96]	@ (80019c8 <i2c1_readburst+0xfc>)
  8001968:	695b      	ldr	r3, [r3, #20]
  800196a:	f003 0340 	and.w	r3, r3, #64	@ 0x40
  800196e:	2b00      	cmp	r3, #0
  8001970:	d0f9      	beq.n	8001966 <i2c1_readburst+0x9a>
+		*bytes = I2C1->DR;					// store byte
  8001972:	4b15      	ldr	r3, [pc, #84]	@ (80019c8 <i2c1_readburst+0xfc>)
  8001974:	691b      	ldr	r3, [r3, #16]
  8001976:	b2da      	uxtb	r2, r3
  8001978:	683b      	ldr	r3, [r7, #0]
  800197a:	701a      	strb	r2, [r3, #0]
+		bytes++;							// move pointer
  800197c:	683b      	ldr	r3, [r7, #0]
  800197e:	3301      	adds	r3, #1
  8001980:	603b      	str	r3, [r7, #0]
+	for (uint8_t i = 0; i < len - 1; i++) {
  8001982:	7bfb      	ldrb	r3, [r7, #15]
  8001984:	3301      	adds	r3, #1
  8001986:	73fb      	strb	r3, [r7, #15]
@@ -3017,26 +3146,36 @@ __weak void HAL_IncTick(void)
  800198c:	3b01      	subs	r3, #1
  800198e:	429a      	cmp	r2, r3
  8001990:	dbe6      	blt.n	8001960 <i2c1_readburst+0x94>
+	}
+
+	i2c1_nack();								// clear ACK bit just after reading second last data byte
  8001992:	f000 f853 	bl	8001a3c <i2c1_nack>
+	if (len == 1)
  8001996:	797b      	ldrb	r3, [r7, #5]
  8001998:	2b01      	cmp	r3, #1
  800199a:	d101      	bne.n	80019a0 <i2c1_readburst+0xd4>
+		(void)I2C1->SR2;
  800199c:	4b0a      	ldr	r3, [pc, #40]	@ (80019c8 <i2c1_readburst+0xfc>)
  800199e:	699b      	ldr	r3, [r3, #24]
+	i2c1_request_stop();
  80019a0:	f000 f82c 	bl	80019fc <i2c1_request_stop>
+	while (!(I2C1->SR1 & I2C_SR1_RXNE));	// wait for full data register
  80019a4:	bf00      	nop
  80019a6:	4b08      	ldr	r3, [pc, #32]	@ (80019c8 <i2c1_readburst+0xfc>)
  80019a8:	695b      	ldr	r3, [r3, #20]
  80019aa:	f003 0340 	and.w	r3, r3, #64	@ 0x40
  80019ae:	2b00      	cmp	r3, #0
  80019b0:	d0f9      	beq.n	80019a6 <i2c1_readburst+0xda>
+	*bytes = I2C1->DR;
  80019b2:	4b05      	ldr	r3, [pc, #20]	@ (80019c8 <i2c1_readburst+0xfc>)
  80019b4:	691b      	ldr	r3, [r3, #16]
  80019b6:	b2da      	uxtb	r2, r3
  80019b8:	683b      	ldr	r3, [r7, #0]
  80019ba:	701a      	strb	r2, [r3, #0]
  80019bc:	e000      	b.n	80019c0 <i2c1_readburst+0xf4>
+		return;
  80019be:	bf00      	nop
+}
  80019c0:	3710      	adds	r7, #16
  80019c2:	46bd      	mov	sp, r7
  80019c4:	bd80      	pop	{r7, pc}
@@ -3044,19 +3183,25 @@ __weak void HAL_IncTick(void)
  80019c8:	40005400 	.word	0x40005400
 
 080019cc <i2c1_start>:
+
+void i2c1_start()
+{
  80019cc:	b480      	push	{r7}
  80019ce:	af00      	add	r7, sp, #0
+	I2C1->CR1 |= I2C_CR1_START;
  80019d0:	4b09      	ldr	r3, [pc, #36]	@ (80019f8 <i2c1_start+0x2c>)
  80019d2:	681b      	ldr	r3, [r3, #0]
  80019d4:	4a08      	ldr	r2, [pc, #32]	@ (80019f8 <i2c1_start+0x2c>)
  80019d6:	f443 7380 	orr.w	r3, r3, #256	@ 0x100
  80019da:	6013      	str	r3, [r2, #0]
+	while (!(I2C1->SR1 & I2C_SR1_SB));		// wait for start bit generation
  80019dc:	bf00      	nop
  80019de:	4b06      	ldr	r3, [pc, #24]	@ (80019f8 <i2c1_start+0x2c>)
  80019e0:	695b      	ldr	r3, [r3, #20]
  80019e2:	f003 0301 	and.w	r3, r3, #1
  80019e6:	2b00      	cmp	r3, #0
  80019e8:	d0f9      	beq.n	80019de <i2c1_start+0x12>
+}
  80019ea:	bf00      	nop
  80019ec:	bf00      	nop
  80019ee:	46bd      	mov	sp, r7
@@ -3066,13 +3211,18 @@ __weak void HAL_IncTick(void)
  80019f8:	40005400 	.word	0x40005400
 
 080019fc <i2c1_request_stop>:
+
+void i2c1_request_stop()
+{
  80019fc:	b480      	push	{r7}
  80019fe:	af00      	add	r7, sp, #0
+	I2C1->CR1 |= I2C_CR1_STOP;
  8001a00:	4b05      	ldr	r3, [pc, #20]	@ (8001a18 <i2c1_request_stop+0x1c>)
  8001a02:	681b      	ldr	r3, [r3, #0]
  8001a04:	4a04      	ldr	r2, [pc, #16]	@ (8001a18 <i2c1_request_stop+0x1c>)
  8001a06:	f443 7300 	orr.w	r3, r3, #512	@ 0x200
  8001a0a:	6013      	str	r3, [r2, #0]
+}
  8001a0c:	bf00      	nop
  8001a0e:	46bd      	mov	sp, r7
  8001a10:	f85d 7b04 	ldr.w	r7, [sp], #4
@@ -3081,13 +3231,18 @@ __weak void HAL_IncTick(void)
  8001a18:	40005400 	.word	0x40005400
 
 08001a1c <i2c1_ack>:
+
+void i2c1_ack()
+{
  8001a1c:	b480      	push	{r7}
  8001a1e:	af00      	add	r7, sp, #0
+	I2C1->CR1 |= I2C_CR1_ACK;
  8001a20:	4b05      	ldr	r3, [pc, #20]	@ (8001a38 <i2c1_ack+0x1c>)
  8001a22:	681b      	ldr	r3, [r3, #0]
  8001a24:	4a04      	ldr	r2, [pc, #16]	@ (8001a38 <i2c1_ack+0x1c>)
  8001a26:	f443 6380 	orr.w	r3, r3, #1024	@ 0x400
  8001a2a:	6013      	str	r3, [r2, #0]
+}
  8001a2c:	bf00      	nop
  8001a2e:	46bd      	mov	sp, r7
  8001a30:	f85d 7b04 	ldr.w	r7, [sp], #4
@@ -3096,13 +3251,18 @@ __weak void HAL_IncTick(void)
  8001a38:	40005400 	.word	0x40005400
 
 08001a3c <i2c1_nack>:
+
+void i2c1_nack()
+{
  8001a3c:	b480      	push	{r7}
  8001a3e:	af00      	add	r7, sp, #0
+	I2C1->CR1 &= ~I2C_CR1_ACK;
  8001a40:	4b05      	ldr	r3, [pc, #20]	@ (8001a58 <i2c1_nack+0x1c>)
  8001a42:	681b      	ldr	r3, [r3, #0]
  8001a44:	4a04      	ldr	r2, [pc, #16]	@ (8001a58 <i2c1_nack+0x1c>)
  8001a46:	f423 6380 	bic.w	r3, r3, #1024	@ 0x400
  8001a4a:	6013      	str	r3, [r2, #0]
+}
  8001a4c:	bf00      	nop
  8001a4e:	46bd      	mov	sp, r7
  8001a50:	f85d 7b04 	ldr.w	r7, [sp], #4
@@ -3111,73 +3271,104 @@ __weak void HAL_IncTick(void)
  8001a58:	40005400 	.word	0x40005400
 
 08001a5c <i2c1_release>:
+
+void i2c1_release()
+{
  8001a5c:	b480      	push	{r7}
  8001a5e:	b085      	sub	sp, #20
  8001a60:	af00      	add	r7, sp, #0
+	// set SCL and SDA lines as outputs
+	GPIOB->MODER |= GPIO_MODER_MODER9_0 | GPIO_MODER_MODER8_0;
  8001a62:	4b27      	ldr	r3, [pc, #156]	@ (8001b00 <i2c1_release+0xa4>)
  8001a64:	681b      	ldr	r3, [r3, #0]
  8001a66:	4a26      	ldr	r2, [pc, #152]	@ (8001b00 <i2c1_release+0xa4>)
  8001a68:	f443 23a0 	orr.w	r3, r3, #327680	@ 0x50000
  8001a6c:	6013      	str	r3, [r2, #0]
+	GPIOB->MODER &= ~(GPIO_MODER_MODER9_1 | GPIO_MODER_MODER8_1);
  8001a6e:	4b24      	ldr	r3, [pc, #144]	@ (8001b00 <i2c1_release+0xa4>)
  8001a70:	681b      	ldr	r3, [r3, #0]
  8001a72:	4a23      	ldr	r2, [pc, #140]	@ (8001b00 <i2c1_release+0xa4>)
  8001a74:	f423 2320 	bic.w	r3, r3, #655360	@ 0xa0000
  8001a78:	6013      	str	r3, [r2, #0]
+
+	// output open drain
+	GPIOB->OTYPER |= GPIO_OTYPER_OT9 | GPIO_OTYPER_OT8;
  8001a7a:	4b21      	ldr	r3, [pc, #132]	@ (8001b00 <i2c1_release+0xa4>)
  8001a7c:	685b      	ldr	r3, [r3, #4]
  8001a7e:	4a20      	ldr	r2, [pc, #128]	@ (8001b00 <i2c1_release+0xa4>)
  8001a80:	f443 7340 	orr.w	r3, r3, #768	@ 0x300
  8001a84:	6053      	str	r3, [r2, #4]
+
+	// set SDA line high, so that after slave releases the SDA and listens for ACK/NACK, it will get NACK
+	GPIOB->ODR |= GPIO_ODR_ODR_9;
  8001a86:	4b1e      	ldr	r3, [pc, #120]	@ (8001b00 <i2c1_release+0xa4>)
  8001a88:	695b      	ldr	r3, [r3, #20]
  8001a8a:	4a1d      	ldr	r2, [pc, #116]	@ (8001b00 <i2c1_release+0xa4>)
  8001a8c:	f443 7300 	orr.w	r3, r3, #512	@ 0x200
  8001a90:	6153      	str	r3, [r2, #20]
+
+	// generate 10 clock pulses on SCL line
+	for (int i = 0; i < 10; i++) {
  8001a92:	2300      	movs	r3, #0
  8001a94:	60fb      	str	r3, [r7, #12]
  8001a96:	e024      	b.n	8001ae2 <i2c1_release+0x86>
+
+		GPIOB->ODR |= GPIO_ODR_ODR_8;
  8001a98:	4b19      	ldr	r3, [pc, #100]	@ (8001b00 <i2c1_release+0xa4>)
  8001a9a:	695b      	ldr	r3, [r3, #20]
  8001a9c:	4a18      	ldr	r2, [pc, #96]	@ (8001b00 <i2c1_release+0xa4>)
  8001a9e:	f443 7380 	orr.w	r3, r3, #256	@ 0x100
  8001aa2:	6153      	str	r3, [r2, #20]
+		for (int j = 0; j < 1000; j++)
  8001aa4:	2300      	movs	r3, #0
  8001aa6:	60bb      	str	r3, [r7, #8]
  8001aa8:	e003      	b.n	8001ab2 <i2c1_release+0x56>
+			__NOP();
  8001aaa:	bf00      	nop
+		for (int j = 0; j < 1000; j++)
  8001aac:	68bb      	ldr	r3, [r7, #8]
  8001aae:	3301      	adds	r3, #1
  8001ab0:	60bb      	str	r3, [r7, #8]
  8001ab2:	68bb      	ldr	r3, [r7, #8]
  8001ab4:	f5b3 7f7a 	cmp.w	r3, #1000	@ 0x3e8
  8001ab8:	dbf7      	blt.n	8001aaa <i2c1_release+0x4e>
+
+		GPIOB->ODR &= ~GPIO_ODR_ODR_8;
  8001aba:	4b11      	ldr	r3, [pc, #68]	@ (8001b00 <i2c1_release+0xa4>)
  8001abc:	695b      	ldr	r3, [r3, #20]
  8001abe:	4a10      	ldr	r2, [pc, #64]	@ (8001b00 <i2c1_release+0xa4>)
  8001ac0:	f423 7380 	bic.w	r3, r3, #256	@ 0x100
  8001ac4:	6153      	str	r3, [r2, #20]
+		for (int j = 0; j < 1000; j++)
  8001ac6:	2300      	movs	r3, #0
  8001ac8:	607b      	str	r3, [r7, #4]
  8001aca:	e003      	b.n	8001ad4 <i2c1_release+0x78>
+			__NOP();
  8001acc:	bf00      	nop
+		for (int j = 0; j < 1000; j++)
  8001ace:	687b      	ldr	r3, [r7, #4]
  8001ad0:	3301      	adds	r3, #1
  8001ad2:	607b      	str	r3, [r7, #4]
  8001ad4:	687b      	ldr	r3, [r7, #4]
  8001ad6:	f5b3 7f7a 	cmp.w	r3, #1000	@ 0x3e8
  8001ada:	dbf7      	blt.n	8001acc <i2c1_release+0x70>
+	for (int i = 0; i < 10; i++) {
  8001adc:	68fb      	ldr	r3, [r7, #12]
  8001ade:	3301      	adds	r3, #1
  8001ae0:	60fb      	str	r3, [r7, #12]
  8001ae2:	68fb      	ldr	r3, [r7, #12]
  8001ae4:	2b09      	cmp	r3, #9
  8001ae6:	ddd7      	ble.n	8001a98 <i2c1_release+0x3c>
+	}
+
+	// set SCL high, line should be pulled high when I2C is idle
+	GPIOB->ODR |= GPIO_ODR_ODR_8;
  8001ae8:	4b05      	ldr	r3, [pc, #20]	@ (8001b00 <i2c1_release+0xa4>)
  8001aea:	695b      	ldr	r3, [r3, #20]
  8001aec:	4a04      	ldr	r2, [pc, #16]	@ (8001b00 <i2c1_release+0xa4>)
  8001aee:	f443 7380 	orr.w	r3, r3, #256	@ 0x100
  8001af2:	6153      	str	r3, [r2, #20]
+}
  8001af4:	bf00      	nop
  8001af6:	3714      	adds	r7, #20
  8001af8:	46bd      	mov	sp, r7
