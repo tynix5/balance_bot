@@ -28,6 +28,13 @@ is mapped to a range of PWM values, used to drive the motors. The internal clock
 
 - BNO055, DRV8833, and MPM3160 are mounted below STM32 using double sided tape and screws
 
+### Second Revision ###
+- PCB on 3D printed design
+- Note BNO055 was replaced by a cheaper BNO055 clone after frying the first one
+![Image_250729_193450](https://github.com/user-attachments/assets/4d6feee7-22d9-466f-95f6-b10f4b30419b)
+![Image_250729_193522](https://github.com/user-attachments/assets/2c677925-420d-4dff-981e-6546b54f8ccd)
+
+
 ## Schematic ##
 <img width="1800" height="1236" alt="balance_bot_schematic_rev1_2" src="https://github.com/user-attachments/assets/baffed60-1463-4d13-aa16-f9a8d333b3b0" />
 
@@ -36,9 +43,11 @@ is mapped to a range of PWM values, used to drive the motors. The internal clock
 - After completing the initial project, I decided to design a PCB to clean it up
 - Rev 1.1 fixed Rev 1.0 improper pinout for the PMOS and missing vias for the ground plane on the +3.3V regulator
 - Rev 1.1 caused a BNO055 sensor to fry due to back EMF; Rev 1.2 moved sensor supply to +3.3V and added 100uF decoupling cap on +5V rails for extra isolation
-- Rev 1.2 could be improved using VIN rails for motor power and limiting motor voltage in software using PWM
+- Rev 1.2 could be improved using VIN rails for motor power and limiting motor voltage in software using PWM; current sense resistors on DRV8833 could also be increased for higher current
 <img width="2109" height="996" alt="balance_bot_pcb_rev1_2" src="https://github.com/user-attachments/assets/09be0087-69a4-47cf-9654-d05b666cd263" />
-- Revision 1.2
+<p align=center> Revision 1.2
+  
+![IMG_4787](https://github.com/user-attachments/assets/5d5bf243-17a1-4505-9807-19a068eb1292)
 
 
 ## Power ##
