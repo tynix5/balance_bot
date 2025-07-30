@@ -29,6 +29,12 @@ void motors_set_speed(uint8_t motor, uint8_t dir, uint16_t pwm);
 void motors_en();
 void motors_dis();			// DRV8833 sleep mode
 
+// user led
+void led_config();
+void led_on();
+void led_off();
+void led_toggle();
+
 // wheel encoders
 void encoder_config();
 
@@ -56,8 +62,13 @@ int main(void)
 	encoder_config();
 	refresh_tim_config();
 
+	led_config();
+	led_on();
+
 	// ensure IMU connected
 	while (!imu_config());
+
+	led_off();
 
 	// Encoder PID constants
 	const float encoder_kp = 0.00625;
@@ -106,8 +117,9 @@ int main(void)
 	  while (!(TIM5->SR & (TIM_SR_UIF)));	// wait for next fusion data
 
 	  // Run this loop at ~14Hz to allow time for motors to engage, makes for much smoother balancing
-	  if (++encoder_loop_cnt == 7) {
-
+	  if (++encoder_loop_cnt == 7)
+	  {
+		  led_toggle();
 		  // 768 encoder ticks per wheel revolution (TIM2->CNT will read 768)
 		  // read encoder error and calculate target pitch
 		  // ticks is < 0 when pitch > 0
@@ -153,8 +165,8 @@ int main(void)
 
 
 	  // if robot passes critical angle, turn off
-	  if (fabs(pitch) > critical_angle) {
-
+	  if (fabs(pitch) > critical_angle)
+	  {
 		  motors_set_speed(MOTOR_LEFT, motor_dir, 0);
 		  motors_set_speed(MOTOR_RIGHT, motor_dir, 0);
 		  continue;
@@ -171,8 +183,8 @@ int main(void)
   }
 }
 
-void clock_config() {
-
+void clock_config()
+{
 	// 16 MHz HSI oscillator is default on reset, but select anyways
 	RCC->CR |= RCC_CR_HSION;
 	// wait for HSI to be ready
@@ -228,8 +240,8 @@ void clock_config() {
 	while (!((RCC->CFGR) & RCC_CFGR_SWS_1));
 }
 
-void pwm_config() {
-
+void pwm_config()
+{
 	// TIM3 is a 16-bit counter
 	// TIM3_CH1 is PA6 (D12)
 	// TIM3_CH2 is PA7 (D11)
@@ -283,9 +295,8 @@ void pwm_config() {
 	TIM3->CR1 |= TIM_CR1_CEN;	// enable counter
 }
 
-
-void motors_config() {
-
+void motors_config()
+{
 	pwm_config();
 
 	// DRV8833 sleep is pin D3
@@ -298,8 +309,8 @@ void motors_config() {
 	motors_en();
 }
 
-void motors_set_speed(uint8_t motor, uint8_t dir, uint16_t pwm) {
-
+void motors_set_speed(uint8_t motor, uint8_t dir, uint16_t pwm)
+{
 	// to set forward PWM on DRV8833, IN1 = PWM, IN2 = 1
 	// to set backward PWM, IN1 = 1, IN2 = PWM
 	// these are for slow decay mode, enabling responsive motors
@@ -332,23 +343,43 @@ void motors_set_speed(uint8_t motor, uint8_t dir, uint16_t pwm) {
 	}
 }
 
-
-void motors_en() {
-
+void motors_en()
+{
 	// turn on PA3 to disable sleep DRV8833
 	GPIOA->ODR |= GPIO_ODR_OD3;
 }
 
-
-void motors_dis() {
-
+void motors_dis()
+{
 	// turn off PA3 to sleep DRV8833
 	GPIOA->ODR &= ~GPIO_ODR_OD3;
 }
 
+void led_config()
+{
+	RCC->AHB1ENR |= RCC_AHB1ENR_GPIOAEN;	// enable GPIOA clock
 
-void encoder_config() {
+	GPIOA->MODER &= ~GPIO_MODER_MODER15;	// PA15 output
+	GPIOA->MODER |= GPIO_MODER_MODER15_0;
+}
 
+void led_on()
+{
+	GPIOA->ODR |= GPIO_ODR_OD15;
+}
+
+void led_off()
+{
+	GPIOA->ODR &= ~GPIO_ODR_OD15;
+}
+
+void led_toggle()
+{
+	GPIOA->ODR ^= GPIO_ODR_OD15;
+}
+
+void encoder_config()
+{
 	RCC->APB1ENR |= RCC_APB1ENR_TIM2EN;		// enable TIM2 clock
 	RCC->AHB1ENR |= RCC_AHB1ENR_GPIOAEN;	// enable GPIOA clock
 
@@ -377,9 +408,8 @@ void encoder_config() {
 	TIM2->CR1 |= TIM_CR1_CEN;		// enable counter
 }
 
-
-void refresh_tim_config() {
-
+void refresh_tim_config()
+{
 	RCC->APB1ENR |= RCC_APB1ENR_TIM5EN;		// enable TIM5 clock
 
 	TIM5->PSC = 0;				// /1 prescaler
@@ -391,9 +421,8 @@ void refresh_tim_config() {
 	TIM5->CR1 |= TIM_CR1_CEN;	// enable counter
 }
 
-
-uint8_t imu_config() {
-
+uint8_t imu_config()
+{
 	i2c1_config();
 
 	while (!imu_test());		// read chip id
@@ -429,16 +458,14 @@ uint8_t imu_config() {
 	return ((i2c1_readbyte(IMU_ADDR, IMU_ST_RESULT_REG) & 0x0f) == 0x0f) ? 1 : 0;
 }
 
-
-uint8_t imu_test() {
-
+uint8_t imu_test()
+{
 	// returns 1 if correct chip id is read
 	return (i2c1_readbyte(IMU_ADDR, IMU_WHO_AM_I_REG) == 0xa0) ? 1 : 0;
 }
 
-
-void imu_read_euler(int16_t * roll_raw, int16_t * pitch_raw, int16_t * heading_raw) {
-
+void imu_read_euler(int16_t * roll_raw, int16_t * pitch_raw, int16_t * heading_raw)
+{
 	uint8_t raw_euler[6];			// 6 bytes total for euler angles
 	const uint8_t start_addr = 0x1a;		// starting byte is heading LSB
 	i2c1_readburst(IMU_ADDR, start_addr, 6, raw_euler);		// read 6 consecutive bytes
@@ -447,17 +474,15 @@ void imu_read_euler(int16_t * roll_raw, int16_t * pitch_raw, int16_t * heading_r
 	*pitch_raw = raw_euler[4] | (raw_euler[5] << 8);
 }
 
-
-void convert_euler(int16_t roll_raw, int16_t pitch_raw, int16_t heading_raw, float * roll, float * pitch, float * heading) {
-
+void convert_euler(int16_t roll_raw, int16_t pitch_raw, int16_t heading_raw, float * roll, float * pitch, float * heading)
+{
 	*roll = roll_raw / 16.0;		// 1 degree = 16 LSB
 	*pitch = pitch_raw / 16.0;
 	*heading = heading_raw / 16.0;
 }
 
-
-float imu_calibrate() {
-
+float imu_calibrate()
+{
 	float err = 0;
 
 	int16_t roll_raw, pitch_raw, heading_raw;
@@ -476,9 +501,8 @@ float imu_calibrate() {
 	return err / 100.0;
 }
 
-
-float constrain(float var, float min, float max) {
-
+float constrain(float var, float min, float max)
+{
 	// returns value in range [min, max]
 	if (var > max)
 		return max;
@@ -488,9 +512,8 @@ float constrain(float var, float min, float max) {
 		return var;
 }
 
-
-uint32_t map(float in, float in_min, float in_max, float out_min, float out_max) {
-
+uint32_t map(float in, float in_min, float in_max, float out_min, float out_max)
+{
 	// map function: output = output_start + ((output_end - output_start) / (input_end - input_start)) * (input - input_start)
 	return (uint32_t) (out_min + ((out_max - out_min) / (in_max - in_min)) * (in - in_min));
 }
