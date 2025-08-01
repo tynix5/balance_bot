@@ -1,0 +1,45 @@
+### Footprint positions - created on 2025-07-28T19:37:41-0500 ###
+### Printed by KiCad version 9.0.2
+## Unit = mm, Angle = deg.
+## Side : top
+# Ref     Val                 Package                                       PosX       PosY       Rot  Side
+C1        100n                C_0805_2012Metric                         170.4086  -112.1664   90.0000  top
+C2        4u7                 C_0805_2012Metric                         141.7400  -107.5000    0.0000  top
+C3        4u7                 C_0805_2012Metric                         155.2400   -92.8400    0.0000  top
+C4        100n                C_0805_2012Metric                         159.5000   -96.3900  -90.0000  top
+C5        100n                C_0805_2012Metric                         152.3136  -109.3978  180.0000  top
+C6        100n                C_0805_2012Metric                         139.5000  -103.4500   90.0000  top
+C7        100n                C_0805_2012Metric                         139.4460   -96.2660   90.0000  top
+C8        30p                 C_0805_2012Metric                         150.5500   -89.8400  180.0000  top
+C9        30p                 C_0805_2012Metric                         146.5500   -89.8400  180.0000  top
+C10       1u                  C_0805_2012Metric                         114.0620   -90.8760  180.0000  top
+C11       100n                C_0805_2012Metric                         114.1120   -87.3760  180.0000  top
+C12       100n                C_0805_2012Metric                         124.2720   -90.8760    0.0000  top
+C13       1u                  C_0805_2012Metric                         124.2720   -87.3760    0.0000  top
+C14       10u                 C_0805_2012Metric                         129.2860  -104.5820  -90.0000  top
+C15       100n                C_0805_2012Metric                         134.1120  -104.6480   90.0000  top
+C16       100u                C_0805_2012Metric                         118.0338   -93.6244  -90.0000  top
+D1        RED                 LED_0805_2012Metric                       122.7605   -83.0580    0.0000  top
+D2        GREEN               LED_0805_2012Metric                       158.2697  -109.5756  180.0000  top
+J1        Encoder_B_Breakout  PinHeader_1x03_P2.54mm_Vertical           132.8420   -86.5000    0.0000  top
+J2        Encoder_A_Breakout  PinHeader_1x03_P2.54mm_Vertical           136.5000   -86.5000    0.0000  top
+J3        Debug/Program       PinHeader_1x05_P2.54mm_Vertical           147.0660  -116.5860   90.0000  top
+J4        VIN                 PinHeader_1x02_P2.54mm_Vertical           102.7684   -89.3368  180.0000  top
+J5        MOTOR_RIGHT         PinSocket_1x02_P2.54mm_Vertical           134.8940  -116.5610   90.0000  top
+J6        MOTOR_LEFT          PinSocket_1x02_P2.54mm_Vertical           126.3940  -116.5610   90.0000  top
+Q1        PMOS                PMOS                                      109.0000   -88.5000    0.0000  top
+R1        0.4                 R_0805_2012Metric                         121.9200   -99.4175   90.0000  top
+R2        2k2                 R_0805_2012Metric                         164.6936  -106.7562    0.0000  top
+R3        2k2                 R_0805_2012Metric                         164.6701  -104.0892    0.0000  top
+R4        10k                 R_0805_2012Metric                         157.5875  -102.5000    0.0000  top
+R5        0.4                 R_0805_2012Metric                         119.3800   -99.4175   90.0000  top
+R6        330                 R_0805_2012Metric                         118.5710   -83.0020  180.0000  top
+R7        330                 R_0805_2012Metric                         162.6635  -109.6010  180.0000  top
+SW1       NRST                SW_Push_2P2T_Toggle_CK_PVA2OAH5xxxxxxV2   175.3908  -107.1880    0.0000  top
+U1        STM32F401RETx       LQFP-64_10x10mm_P0.5mm                    148.2400   -99.8400  -90.0000  top
+U2        ~                   PinHeader_1x04_P2.54mm_Vertical           114.0800   -95.0000  -90.0000  top
+U4        ~                   TSSOP-16-1EP_4.4x5mm_P0.65mm              131.6650   -99.5550    0.0000  top
+U5        ~                   adafruit_BNO055                           188.0000   -92.0000   90.0000  top
+U6        AP2112K-3.3         SOT-23-5_HandSoldering                    119.0460   -89.0880    0.0000  top
+Y1        8MHz                Crystal_HC49-U_Vertical                   151.0000   -85.3400  180.0000  top
+## End
